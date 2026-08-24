@@ -52,3 +52,15 @@ def test_parse_plain_sdr_source():
     assert (info.display_width, info.display_height) == (1920, 1080)
     assert info.rotation == 0
     assert info.is_hdr is False
+
+
+def test_display_matrix_wins_over_a_contradicting_rotate_tag():
+    stream = load("ffprobe_rotated.json")["streams"][0]
+    # Tag says 90, Display Matrix says -90; Display Matrix should win
+    assert probe.rotation_from_side_data(stream) == -90
+
+
+def test_rotate_tag_without_display_matrix_is_ignored():
+    stream = load("ffprobe_tag_only.json")["streams"][0]
+    # Only has rotate tag, no Display Matrix; should return 0
+    assert probe.rotation_from_side_data(stream) == 0

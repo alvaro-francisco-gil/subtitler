@@ -9,7 +9,7 @@
       "color_transfer": "arib-std-b67",
       "color_primaries": "bt2020",
       "color_space": "bt2020nc",
-      "tags": {},
+      "tags": {"rotate": "90"},
       "side_data_list": [
         {"side_data_type": "DOVI configuration record", "dv_profile": 8},
         {"side_data_type": "Display Matrix", "rotation": -90},
