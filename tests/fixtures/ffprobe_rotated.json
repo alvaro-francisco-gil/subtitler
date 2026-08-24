@@ -1,0 +1,22 @@
+{
+  "streams": [
+    {
+      "codec_type": "video",
+      "width": 1920,
+      "height": 1080,
+      "r_frame_rate": "24000/1001",
+      "duration": "691.135000",
+      "color_transfer": "arib-std-b67",
+      "color_primaries": "bt2020",
+      "color_space": "bt2020nc",
+      "tags": {},
+      "side_data_list": [
+        {"side_data_type": "DOVI configuration record", "dv_profile": 8},
+        {"side_data_type": "Display Matrix", "rotation": -90},
+        {"side_data_type": "Ambient viewing environment"}
+      ]
+    },
+    {"codec_type": "audio", "sample_rate": "48000", "channels": 2}
+  ],
+  "format": {"duration": "691.135000"}
+}
