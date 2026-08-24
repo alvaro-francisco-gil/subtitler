@@ -43,8 +43,8 @@ def test_sentence_punctuation_is_preserved():
 
 
 def test_whitespace_collapses_and_lines_join():
-    result = clean.clean_transcript("uno   dos\n\n\ntres\n")
-    assert result.text == "tres"
+    result = clean.clean_transcript("Empieza aqui.\n\nuno   dos\n\n\ntres\n")
+    assert result.text == "Empieza aqui. uno dos tres"
 
 
 def test_positions_point_back_at_the_original_file():
