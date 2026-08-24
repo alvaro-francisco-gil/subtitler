@@ -1,0 +1,27 @@
+# All look-and-feel lives here. No visual constant belongs in Python.
+
+[font]
+# Family name as libass will see it. The vendored file is a static
+# instance of the Montserrat variable font at weight 800.
+family = "Montserrat ExtraBold"
+file = "assets/fonts/Montserrat-ExtraBold.ttf"
+size = 96
+
+[colour]
+fill = "#FFFFFF"       # words in the cue that are not currently spoken
+highlight = "#FFD400"  # the word being spoken right now
+outline = "#000000"
+
+[layout]
+position = 0.72        # centre of the text line, as a fraction of frame height
+outline_width = 6.0
+shadow_depth = 3.0
+all_caps = true
+
+[animation]
+pop_scale = 1.08       # peak scale of the pop-in overshoot
+pop_ms = 140           # total duration of the pop-in
+
+[cues]
+max_words = 3
+pause_break = 0.35     # silence longer than this forces a cue break, seconds
