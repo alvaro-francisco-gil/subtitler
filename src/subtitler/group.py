@@ -11,7 +11,7 @@ from __future__ import annotations
 from .models import Cue, Word
 
 SENTENCE_ENDINGS = ".!?:;"
-TRAILING_PUNCTUATION = "\"')]}»\"'"
+TRAILING_PUNCTUATION = '"\')]}»”’'
 
 
 def ends_sentence(text: str) -> bool:
