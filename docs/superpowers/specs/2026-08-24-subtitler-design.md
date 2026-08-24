@@ -16,6 +16,18 @@ First target: `pregon_matamala.mov` — an 11:31 live speech in Spanish,
 iPhone HEVC 10-bit, stored 1920x1080 with `rotation=-90`, i.e. displayed
 1080x1920 vertical, 23.976 fps, AAC stereo 48 kHz.
 
+Verified by probing the file on 2026-08-24:
+
+- Rotation is carried in stream side data as a Display Matrix entry with
+  `rotation: -90`. It is *not* in `stream_tags.rotate`. Readers must parse
+  `-show_entries stream_side_data`.
+- ffmpeg 8.0.1 **auto-rotates on decode**: a filtered output comes out
+  1080x1920 with no `transpose` filter. The pipeline must therefore know the
+  display resolution for layout, but must not apply its own rotation.
+- The file is **Dolby Vision profile 8.4 over an HLG BT.2020 base layer**
+  (`color_transfer=arib-std-b67`, `color_primaries=bt2020`,
+  `color_space=bt2020nc`, Main 10).
+
 ## Non-goals
 
 - No reframing or aspect-ratio conversion. The source is already vertical.
@@ -24,6 +36,7 @@ iPhone HEVC 10-bit, stored 1920x1080 with `rotation=-90`, i.e. displayed
 - No multi-language configuration. Spanish is hardcoded as the alignment
   language for now; it becomes a flag only when a second language is needed.
 - No per-frame renderer. See "Rejected alternatives".
+- No HDR output. Output is always SDR BT.709. See "Colour handling".
 
 ## Look and feel
 
@@ -71,11 +84,14 @@ Also probes the container and records, in `meta.json`:
 - the resulting **display** width/height
 - frame rate, duration, pixel format, audio stream index
 
-The rotation flag is the highest-risk detail in the whole pipeline: a
-subtitle burn-in that ignores it produces text positioned for the wrong
-canvas, or a video that silently loses its rotation metadata and plays
-sideways. Display resolution is computed once here, from the metadata, and
-every later stage consumes that value rather than re-deriving it.
+Rotation is a known trap, though a narrower one than it first appears:
+ffmpeg auto-rotates on decode, so the burn-in sees an upright 1080x1920
+frame and no `transpose` is needed. What the pipeline still needs is to know
+that display resolution *before* decoding, so the ASS canvas
+(`PlayResX`/`PlayResY`) and all layout maths use 1080x1920 rather than the
+stored 1920x1080. Getting that backwards positions every subtitle off-screen.
+Display resolution is computed once here and every later stage consumes it
+rather than re-deriving it.
 
 ### [2] clean
 
@@ -145,9 +161,38 @@ Per cue, the renderer emits one Dialogue event per word:
   on the others
 - `\bord` and `\shad` for outline and drop shadow
 
-Burn-in uses the `subtitles` filter with the vendored fontdir. Encoding
-defaults to NVENC HEVC to preserve the 10-bit source, with a libx264 8-bit
-fallback flag for maximum compatibility.
+### Colour handling
+
+The source is Dolby Vision profile 8.4 over an HLG BT.2020 base layer.
+Burning subtitles requires decode, filter and re-encode, which destroys the
+Dolby Vision RPU unconditionally — no filter graph can preserve it. That is
+not a choice the tool makes; it is a property of burning in subtitles.
+
+The base layer is a choice, and the decision is: **tone-map to SDR BT.709**.
+
+An HLG BT.2020-tagged file is handled inconsistently downstream — players and
+platforms that ignore the tags render it washed out and desaturated.
+Tone-mapping makes the output look the same everywhere, at the cost of HDR
+range. This matches what the previous CapCut workflow was effectively doing.
+
+The filter chain is, in order:
+
+```
+zscale=t=linear:npl=100,
+tonemap=hable:desat=0,
+zscale=p=bt709:t=bt709:m=bt709:r=tv,
+format=yuv420p,
+subtitles=<ass>:fontsdir=<assets/fonts>
+```
+
+Tone-mapping happens **before** the `subtitles` filter, so subtitle colours
+are authored and composited in SDR BT.709 and mean exactly what
+`style.toml` says. Compositing sRGB text onto a linear or HLG timeline and
+tone-mapping afterwards would distort the styled colours.
+
+Encoding defaults to `h264_nvenc` at 8-bit — the output is SDR, and H.264
+maximises platform compatibility. `libx264` is the fallback when NVENC is
+unavailable.
 
 `subs.ass` is kept as a deliverable in its own right — it can be re-burned,
 edited by hand, or loaded into another editor.
@@ -198,12 +243,18 @@ Unit tests, on pure logic with no ffmpeg or GPU involved:
   timecode formatting, event ordering
 - rotation math: stored dimensions plus rotation to display dimensions,
   covering 0, 90, -90 and 180
+- side-data parsing: extracting `rotation` from a Display Matrix entry in a
+  recorded `ffprobe` JSON fixture, including the case where no Display
+  Matrix is present
+- filter-chain assembly: tone-map stages precede the `subtitles` stage
 
 Integration tests:
 
 - one end-to-end smoke test over roughly 15 seconds of real audio, asserting
-  that an output file is produced, has the expected display resolution, and
-  has a duration matching the requested window
+  that an output file is produced, has the expected display resolution
+  (1080x1920, proving auto-rotation was neither missed nor double-applied),
+  is tagged BT.709 rather than BT.2020, and has a duration matching the
+  requested window
 - a drift-report test using a fixture where the audio deliberately omits a
   scripted sentence, asserting the omission is flagged
 
