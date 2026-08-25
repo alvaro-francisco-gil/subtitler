@@ -44,6 +44,7 @@ def test_filter_chain_without_tone_mapping_is_just_subtitles():
 def test_filter_path_escaping():
     assert render.escape_filter_path(Path("/a b/subs.ass")) == "/a b/subs.ass"
     assert render.escape_filter_path(Path("/a:b/subs.ass")) == r"/a\:b/subs.ass"
+    assert render.escape_filter_path(Path("/a'b/subs.ass")) == r"/a\'b/subs.ass"
 
 
 def test_command_never_transposes():
@@ -93,6 +94,19 @@ def test_shift_cues_rebases_to_the_window_and_drops_the_rest():
     assert shifted[0].text == "b"
     assert shifted[0].start == pytest.approx(1.0)
     assert shifted[0].end == pytest.approx(2.0)
+
+
+def test_shift_cues_clamps_a_cue_straddling_the_window_start():
+    cues = [Cue(words=(Word("a", 8.0, 9.0), Word("b", 9.0, 12.0)))]
+    shifted = render.shift_cues(cues, start=10.0, end=20.0)
+    assert shifted[0].start == 0.0
+    assert all(w.start >= 0.0 and w.end >= 0.0 for w in shifted[0].words)
+
+
+def test_shift_cues_clamps_a_cue_straddling_the_window_end():
+    cues = [Cue(words=(Word("a", 18.0, 25.0),))]
+    shifted = render.shift_cues(cues, start=10.0, end=20.0)
+    assert shifted[0].end == 10.0
 
 
 @pytest.mark.slow
