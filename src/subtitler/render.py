@@ -16,6 +16,9 @@ style.toml says. Tone-mapping therefore runs *before* the subtitles filter.
 
 from __future__ import annotations
 
+import re
+import shutil
+import tempfile
 from pathlib import Path
 
 from . import binaries
@@ -29,20 +32,38 @@ TONE_MAP_FILTERS = (
     "format=yuv420p",
 )
 
+SAFE_PATH = re.compile(r"^[A-Za-z0-9/._-]+$")
+
+
+class UnsafePathError(Exception):
+    """A path that must reach ffmpeg's filter string contains characters we cannot escape."""
+
+
+def _assert_safe(path: Path) -> str:
+    """Guarantee a path is free of every character ffmpeg's filter parser treats as special.
+
+    ffmpeg parses the filter string at two levels, and a literal backslash cannot
+    be escaped reliably at all. Rather than escape user paths, we stage files into
+    a directory we name ourselves and assert the result is safe.
+    """
+    text = str(path)
+    if not SAFE_PATH.match(text):
+        raise UnsafePathError(
+            f"refusing to pass {text!r} to an ffmpeg filter: it contains characters "
+            f"the filter parser cannot round-trip. This is a bug — staged paths "
+            f"should always be safe."
+        )
+    return text
+
 
 def escape_filter_path(path: Path) -> str:
     """Escape a path for use inside an ffmpeg filter argument.
 
-    The value is unquoted inside the filter string, so ffmpeg's tokenizer
-    treats backslash, colon and single quote as special. The backslash must be
-    escaped first, or it would double-escape the escapes added after it.
+    Only paths we have staged ourselves reach this, and `_assert_safe` has
+    already guaranteed they contain no quotes or backslashes. A colon is still
+    escaped because it separates filter options.
     """
-    return (
-        str(path)
-        .replace("\\", "\\\\")
-        .replace(":", "\\:")
-        .replace("'", "\\'")
-    )
+    return str(path).replace(":", "\\:")
 
 
 def build_filter_chain(ass_path: Path, fontsdir: Path, *, tone_map: bool) -> str:
@@ -99,28 +120,37 @@ def burn(
     encoder: str = "h264_nvenc",
 ) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
-    command = build_command(
-        video, ass, out, info,
-        fontsdir=fontsdir, start=start, duration=duration, encoder=encoder,
-    )
-    try:
-        binaries.run(command)
-    except binaries.BinaryError as nvenc_error:
-        if not encoder.endswith("nvenc"):
-            raise
-        # NVENC may be unavailable or busy; fall back to software encoding.
-        # If that fails too, the original error is the more informative one.
+
+    with tempfile.TemporaryDirectory(prefix="subtitler-") as staging:
+        staged_ass = Path(staging) / "subs.ass"
+        staged_fonts = Path(staging) / "fonts"
+        shutil.copyfile(ass, staged_ass)
+        shutil.copytree(fontsdir, staged_fonts)
+
+        _assert_safe(staged_ass)
+        _assert_safe(staged_fonts)
+
+        def command_for(enc: str) -> list[str]:
+            return build_command(
+                video, staged_ass, out, info,
+                fontsdir=staged_fonts, start=start, duration=duration, encoder=enc,
+            )
+
         try:
-            binaries.run(build_command(
-                video, ass, out, info,
-                fontsdir=fontsdir, start=start, duration=duration, encoder="libx264",
-            ))
-        except binaries.BinaryError as fallback_error:
-            raise binaries.BinaryError(
-                f"both NVENC and libx264 failed.\n"
-                f"NVENC: {nvenc_error}\n"
-                f"libx264: {fallback_error}"
-            ) from fallback_error
+            binaries.run(command_for(encoder))
+        except binaries.BinaryError as nvenc_error:
+            if not encoder.endswith("nvenc"):
+                raise
+            # NVENC may be unavailable or busy; fall back to software encoding.
+            try:
+                binaries.run(command_for("libx264"))
+            except binaries.BinaryError as fallback_error:
+                raise binaries.BinaryError(
+                    f"both NVENC and libx264 failed.\n"
+                    f"NVENC: {nvenc_error}\n"
+                    f"libx264: {fallback_error}"
+                ) from fallback_error
+
     return out
 
 

@@ -44,7 +44,11 @@ def test_filter_chain_without_tone_mapping_is_just_subtitles():
 def test_filter_path_escaping():
     assert render.escape_filter_path(Path("/a b/subs.ass")) == "/a b/subs.ass"
     assert render.escape_filter_path(Path("/a:b/subs.ass")) == r"/a\:b/subs.ass"
-    assert render.escape_filter_path(Path("/a'b/subs.ass")) == r"/a\'b/subs.ass"
+
+
+def test_unsafe_staged_path_is_rejected_loudly():
+    with pytest.raises(render.UnsafePathError):
+        render._assert_safe(Path("/tmp/o'brien/subs.ass"))
 
 
 def test_command_never_transposes():
@@ -136,3 +140,30 @@ def test_burn_produces_an_upright_sdr_file(tmp_path):
     assert result.is_hdr is False
     assert result.color_primaries == "bt709"
     assert result.duration == pytest.approx(3.0, abs=0.3)
+
+
+@pytest.mark.slow
+def test_burn_works_from_a_path_containing_special_characters(tmp_path):
+    """The staging fix exists because ffmpeg's filter parser mangles such paths."""
+    awkward = tmp_path / "o'brien's dir"
+    awkward.mkdir()
+    ass_path = awkward / "subs.ass"
+    ass_path.write_text(
+        "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        "Style: K,DejaVu Sans,96,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,6,3,5,0,0,0,1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "Dialogue: 0,0:00:00.00,0:00:02.00,K,,0,0,0,,{\\an5\\pos(540,1382)}HOLA\n"
+    )
+
+    info = probe.probe(FIXTURES / "clip.mov")
+    out = awkward / "out.mp4"
+    render.burn(
+        FIXTURES / "clip.mov", ass_path, out, info,
+        fontsdir=Path("assets/fonts"), start=0.0, duration=2.0, encoder="libx264",
+    )
+
+    assert out.exists()
+    assert probe.probe(out).display_width == 1080
