@@ -25,12 +25,13 @@ def words_from_result(raw_words) -> list[Word]:
         text = raw.word.strip()
         if not text:
             continue
+        probability = getattr(raw, "probability", None)
         words.append(
             Word(
                 text=text,
                 start=float(raw.start),
                 end=float(raw.end),
-                score=float(getattr(raw, "probability", None) or 1.0),
+                score=1.0 if probability is None else float(probability),
             )
         )
     return words

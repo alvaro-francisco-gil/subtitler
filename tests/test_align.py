@@ -60,6 +60,17 @@ def test_missing_probability_defaults_to_one():
     assert words[0].score == 1.0
 
 
+def test_a_genuine_zero_probability_is_not_treated_as_full_confidence():
+    class Garbled:
+        word = "inaudible"
+        start = 1.0
+        end = 1.4
+        probability = 0.0
+
+    words = align.words_from_result([Garbled()])
+    assert words[0].score == 0.0, "a 0.0 probability must survive, not become 1.0"
+
+
 @pytest.mark.gpu
 def test_alignment_on_the_real_clip(tmp_path):
     """Aligns a known 15 s excerpt. Downloads a model on first run."""
