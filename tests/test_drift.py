@@ -81,6 +81,24 @@ def test_report_lists_each_flag_with_a_timecode():
     assert "uno dos" in report
 
 
+def test_a_long_but_plausible_word_is_not_flagged():
+    """A slow content word must not be flagged just for exceeding 3x the median."""
+    words = [w(f"p{i}", i * 0.2, i * 0.2 + 0.15) for i in range(20)]
+    words[7] = w("naturaleza", 1.4, 2.3)  # 0.9s: long for the median, plausible speech
+
+    flags = drift.find_drift(words, gap_threshold=100.0)
+    assert [f for f in flags if f.kind == "long-word"] == []
+
+
+def test_zero_duration_words_do_not_drag_the_median_down():
+    """Aligner-failure words have zero duration; they must not inflate long-word flags."""
+    real = [w(f"p{i}", i * 0.4, i * 0.4 + 0.35) for i in range(10)]
+    collapsed = [w(f"z{i}", 9.0, 9.0) for i in range(10)]
+
+    flags = drift.find_drift(real + collapsed, gap_threshold=100.0)
+    assert [f for f in flags if f.kind == "long-word"] == []
+
+
 @pytest.mark.gpu
 @pytest.mark.slow
 def test_a_sentence_absent_from_the_audio_is_flagged(tmp_path):

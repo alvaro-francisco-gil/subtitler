@@ -15,6 +15,11 @@ from dataclasses import dataclass
 
 from .models import Word
 
+# A word longer than this is implausible for natural speech regardless of the
+# speaker's pace, and indicates the aligner stretched one word across audio it
+# could not match. Ordinary Spanish content words top out near 1 second.
+ABSOLUTE_LONG_WORD = 1.5
+
 
 @dataclass(frozen=True)
 class Flag:
@@ -43,6 +48,7 @@ def find_drift(
     run_length: int = 3,
     gap_threshold: float = 2.0,
     duration_factor: float = 3.0,
+    absolute_floor: float = ABSOLUTE_LONG_WORD,
     positions=None,
 ) -> list[Flag]:
     flags: list[Flag] = []
@@ -76,10 +82,12 @@ def find_drift(
             )
 
     # 3. Words stretched across audio the aligner could not match.
-    median = statistics.median(word.duration for word in words)
-    if median > 0:
+    non_zero = [word.duration for word in words if word.duration > 0]
+    if non_zero:
+        median = statistics.median(non_zero)
+        threshold = max(absolute_floor, median * duration_factor)
         for index, word in enumerate(words):
-            if word.duration > median * duration_factor:
+            if word.duration > threshold:
                 flags.append(
                     Flag(
                         kind="long-word",
