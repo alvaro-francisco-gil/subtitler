@@ -24,11 +24,23 @@ def group_words(
     *,
     max_words: int = 3,
     pause_break: float = 0.35,
+    fits=None,
 ) -> list[Cue]:
+    """Pack words into cues.
+
+    `fits` is an optional predicate taking a list of word texts and returning
+    whether they fit the frame on one line. Breaking on width here — rather
+    than shrinking an over-wide cue at render time — is what keeps the font
+    one consistent size across the whole video.
+    """
     cues: list[Cue] = []
     current: list[Word] = []
 
     for index, word in enumerate(words):
+        if current and fits is not None and not fits([w.text for w in current] + [word.text]):
+            cues.append(Cue(words=tuple(current)))
+            current = []
+
         current.append(word)
 
         at_capacity = len(current) >= max_words
@@ -45,10 +57,10 @@ def group_words(
     if current:
         cues.append(Cue(words=tuple(current)))
 
-    return _rebalance(cues, max_words=max_words, pause_break=pause_break)
+    return _rebalance(cues, max_words=max_words, pause_break=pause_break, fits=fits)
 
 
-def _rebalance(cues: list[Cue], *, max_words: int, pause_break: float) -> list[Cue]:
+def _rebalance(cues: list[Cue], *, max_words: int, pause_break: float, fits=None) -> list[Cue]:
     """Pull a stranded single word back into balance with the cue before it."""
     result = list(cues)
 
@@ -62,6 +74,9 @@ def _rebalance(cues: list[Cue], *, max_words: int, pause_break: float) -> list[C
         if ends_sentence(boundary.text):
             continue
         if current.words[0].start - boundary.end > pause_break:
+            continue
+        moved = [boundary.text] + [w.text for w in current.words]
+        if fits is not None and not fits(moved):
             continue
 
         result[index - 1] = Cue(words=previous.words[:-1])

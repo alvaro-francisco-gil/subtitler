@@ -75,3 +75,43 @@ def test_every_word_survives_grouping():
     words = [w(f"p{i}", i * 0.3, i * 0.3 + 0.25) for i in range(17)]
     cues = group.group_words(words, max_words=3, pause_break=0.35)
     assert [x.text for c in cues for x in c.words] == [x.text for x in words]
+
+
+def width_limit(characters: int):
+    """A `fits` predicate standing in for frame width, one unit per character."""
+
+    def fits(texts: list[str]) -> bool:
+        return sum(len(t) for t in texts) + len(texts) - 1 <= characters
+
+    return fits
+
+
+def test_breaks_a_cue_that_would_not_fit_the_frame():
+    words = [w("largouno", 0.0, 0.3), w("largodos", 0.3, 0.6), w("largotres", 0.6, 0.9)]
+    cues = group.group_words(words, max_words=3, pause_break=10.0, fits=width_limit(17))
+    assert [c.text for c in cues] == ["largouno largodos", "largotres"]
+
+
+def test_a_word_too_wide_on_its_own_still_gets_a_cue():
+    words = [w("uno", 0.0, 0.3), w("interminablemente", 0.3, 0.6)]
+    cues = group.group_words(words, max_words=3, pause_break=10.0, fits=width_limit(5))
+    assert [c.text for c in cues] == ["uno", "interminablemente"]
+
+
+def test_rebalancing_never_creates_an_over_wide_cue():
+    # Pulling "enormemente" forward would balance the word counts but would
+    # put 27 units on a line that holds 20, so the stranded word stays alone.
+    words = [
+        w("a", 0.0, 0.3),
+        w("de", 0.3, 0.6),
+        w("enormemente", 0.6, 0.9),
+        w("descomunalmente", 0.9, 1.2),
+    ]
+    cues = group.group_words(words, max_words=3, pause_break=10.0, fits=width_limit(20))
+    assert [c.text for c in cues] == ["a de enormemente", "descomunalmente"]
+
+
+def test_no_words_are_lost_when_breaking_on_width():
+    words = [w(f"palabra{i}", i * 0.3, i * 0.3 + 0.25) for i in range(11)]
+    cues = group.group_words(words, max_words=3, pause_break=0.35, fits=width_limit(20))
+    assert [x.text for c in cues for x in c.words] == [x.text for x in words]

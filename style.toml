@@ -14,8 +14,8 @@ outline = "#000000"
 
 [layout]
 position = 0.30        # centre of the text line, as a fraction of frame height
-max_width = 0.92       # widest a cue may be, as a fraction of frame width
-word_spacing = 0.25    # multiplier on the font's space advance between words
+max_width = 0.95       # widest a cue may be, as a fraction of frame width
+word_spacing = 1.00    # multiplier on the font's space advance between words
 outline_width = 6.0
 shadow_depth = 3.0
 all_caps = true

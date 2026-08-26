@@ -105,7 +105,20 @@ def pipeline(video: Path, transcript: Path, style_path: Path, *, force: bool = F
     if flags:
         print(f"{len(flags)} drift span(s) flagged — see {work.drift}", file=sys.stderr)
 
-    cues = group.group_words(words, max_words=sty.max_words, pause_break=sty.pause_break)
+    measurer = measure.text_measurer(sty.font_path, sty.font_size)
+
+    def fits(texts: list[str]) -> bool:
+        rendered = [t.upper() if sty.all_caps else t for t in texts]
+        gap = measurer(" ") * sty.word_spacing
+        total = sum(measurer(t) for t in rendered) + gap * (len(rendered) - 1)
+        return total <= info.display_width * sty.max_width
+
+    cues = group.group_words(
+        words,
+        max_words=sty.max_words,
+        pause_break=sty.pause_break,
+        fits=fits,
+    )
     work.cues.write_text(json.dumps(
         [
             {"start": c.start, "end": c.end,
