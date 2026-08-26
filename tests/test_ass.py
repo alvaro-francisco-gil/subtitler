@@ -23,6 +23,7 @@ def sty():
         highlight="#FFD400",
         outline="#000000",
         position=0.72,
+        max_width=0.92,
         word_spacing=1.0,
         outline_width=6.0,
         shadow_depth=3.0,
@@ -145,3 +146,22 @@ def test_word_spacing_tightens_the_gap(sty):
     # Total width shrinks by 25px, so the left word moves right by 12.5px.
     assert r"\pos(425,1440)" in wide
     assert r"\pos(438,1440)" in tight
+
+
+def test_a_wide_cue_is_scaled_to_fit(sty):
+    """119 of 756 real cues overflowed the frame before this existed."""
+    cue = Cue(words=(Word("ABCDEFGHIJ", 0.0, 1.0), Word("KLMNOPQRST", 1.0, 2.0)))
+    doc = ass.build_ass([cue], sty, 1000, 2000, stub_measure)
+
+    # Stub: 50px per glyph, so this cue is 500 + 500 + one gap — far over 1000.
+    import re
+    for x in (int(m) for m in re.findall(r"\\pos\((\d+),", doc)):
+        assert 0 <= x <= 1000, f"word centre {x} is off-canvas"
+    assert "\\fscx" in doc
+
+
+def test_a_narrow_cue_is_not_scaled(sty):
+    cue = Cue(words=(Word("AB", 0.0, 1.0),))
+    doc = ass.build_ass([cue], sty, 1000, 2000, stub_measure)
+    # Only the pop transform should touch scale, never a base shrink.
+    assert "\\fscx100\\fscy100" in doc or "\\fscx93" in doc

@@ -14,7 +14,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from . import align, ass, clean, drift, extract, group, measure, probe, render, style, workdir
+from . import align, ass, binaries, clean, drift, extract, group, measure, probe, render, style, workdir
 from .models import Cue, Word
 from .probe import MediaInfo
 
@@ -35,6 +35,8 @@ def parse_timecode(value: str) -> float:
     seconds = 0.0
     for part in parts:
         seconds = seconds * 60 + float(part)
+    if seconds < 0:
+        raise ValueError(f"timecode {value!r} must not be negative")
     return seconds
 
 
@@ -43,7 +45,13 @@ def first_dense_span(words: list[Word], *, window: float = 10.0) -> float:
 
     The opening of a live recording is usually applause or silence, which
     makes a poor reference for judging subtitle style.
+
+    Words with no duration are excluded. The aligner emits those when it
+    fails, collapsing many of them onto one timestamp — which would otherwise
+    look like the densest speech in the video and send the sample straight to
+    the one region where the subtitles are certainly wrong.
     """
+    words = [word for word in words if word.duration > 0]
     if not words:
         return 0.0
 
@@ -84,7 +92,15 @@ def pipeline(video: Path, transcript: Path, style_path: Path, *, force: bool = F
     else:
         words = align.load_words(work.words)
 
-    flags = drift.find_drift(words, positions=cleaned.positions)
+    positions = cleaned.positions
+    if len(words) != len(positions):
+        print(
+            f"warning: aligned {len(words)} words but the transcript has "
+            f"{len(positions)} — line numbers in the drift report may be off",
+            file=sys.stderr,
+        )
+        positions = None
+    flags = drift.find_drift(words, positions=positions)
     work.drift.write_text(drift.render_report(flags, total_words=len(words)))
     if flags:
         print(f"{len(flags)} drift span(s) flagged — see {work.drift}", file=sys.stderr)
@@ -121,6 +137,10 @@ def command_sample(args) -> int:
     result = pipeline(args.video, args.transcript, args.style, force=args.force)
 
     start = parse_timecode(args.at) if args.at is not None else first_dense_span(result.words)
+    if start >= result.info.duration:
+        raise ValueError(
+            f"--at {start:.0f}s is past the end of a {result.info.duration:.0f}s video"
+        )
     end = start + args.len
 
     windowed = render.shift_cues(result.cues, start=start, end=end)
@@ -187,7 +207,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (binaries.BinaryError, ValueError, OSError) as error:
+        print(f"subtitler: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

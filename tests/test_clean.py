@@ -63,3 +63,13 @@ def test_positions_point_back_at_the_original_file():
 def test_a_title_that_ends_in_punctuation_is_kept():
     result = clean.clean_transcript("Buenas noches.\n\nHola.\n")
     assert result.text == "Buenas noches. Hola."
+
+
+def test_curly_quotes_are_normalised_by_codepoint():
+    raw = "\u201chola\u201d y \u2018adios\u2019 \u00abvale\u00bb \u2014 ya"
+    result = clean.normalise(raw)
+    assert "\u201c" not in result and "\u201d" not in result
+    assert "\u2018" not in result and "\u2019" not in result
+    assert "\u00ab" not in result and "\u00bb" not in result
+    assert "\u2014" not in result
+    assert result == '"hola" y \'adios\' "vale" - ya'

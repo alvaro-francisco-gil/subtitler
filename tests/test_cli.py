@@ -32,6 +32,21 @@ def test_rejects_a_bad_timecode():
         cli.parse_timecode("banana")
 
 
+def test_rejects_a_negative_timecode():
+    with pytest.raises(ValueError):
+        cli.parse_timecode("-5")
+    with pytest.raises(ValueError):
+        cli.parse_timecode("-1:30")
+
+
+def test_first_dense_span_ignores_collapsed_words():
+    """An alignment failure collapses many words onto one timestamp."""
+    real = [w(f"r{i}", 100.0 + i * 0.3, 100.0 + i * 0.3 + 0.25) for i in range(30)]
+    collapsed = [w(f"c{i}", 259.0, 259.0) for i in range(50)]
+
+    assert cli.first_dense_span(real + collapsed, window=10.0) == pytest.approx(100.0, abs=1.0)
+
+
 def test_help_exits_cleanly(capsys):
     with pytest.raises(SystemExit) as exit_info:
         cli.main(["--help"])

@@ -18,9 +18,14 @@ from dataclasses import dataclass
 HEADING_RE = re.compile(r"^\s*[IVXLCDM]+\.\s+\S")
 
 TRANSLATIONS = {
-    "«": '"', "»": '"', """: '"', """: '"',
-    "'": "'", "'": "'",
-    "—": "-", "–": "-",
+    "\u00ab": '"',   # «
+    "\u00bb": '"',   # »
+    "\u201c": '"',   # “
+    "\u201d": '"',   # ”
+    "\u2018": "'",   # ‘
+    "\u2019": "'",   # ’
+    "\u2014": "-",   # em dash
+    "\u2013": "-",   # en dash
 }
 
 TITLE_TERMINATORS = (".", "!", "?", ":")

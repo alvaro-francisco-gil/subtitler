@@ -27,6 +27,7 @@ class Style:
     highlight: str
     outline: str
     position: float
+    max_width: float
     word_spacing: float
     outline_width: float
     shadow_depth: float
@@ -60,6 +61,7 @@ def load(path: Path = DEFAULT_STYLE_PATH) -> Style:
         highlight=data["colour"]["highlight"],
         outline=data["colour"]["outline"],
         position=float(data["layout"]["position"]),
+        max_width=float(data["layout"]["max_width"]),
         word_spacing=float(data["layout"]["word_spacing"]),
         outline_width=float(data["layout"]["outline_width"]),
         shadow_depth=float(data["layout"]["shadow_depth"]),

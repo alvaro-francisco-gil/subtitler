@@ -93,6 +93,8 @@ hardcoded in Python.
 | `colour.highlight` | The word being spoken right now |
 | `colour.outline` | Outline colour |
 | `layout.position` | Vertical centre of the text, as a fraction of frame height |
+| `layout.max_width` | Widest a cue may be, as a fraction of frame width, before it is scaled down to fit |
+| `layout.word_spacing` | Multiplier on the font's space advance between words |
 | `layout.outline_width` | Outline thickness |
 | `layout.shadow_depth` | Drop shadow depth |
 | `layout.all_caps` | Uppercase the subtitles |
@@ -147,6 +149,18 @@ composited in SDR and mean exactly what `style.toml` says.
 Rotation is handled by ffmpeg's automatic rotation on decode. The pipeline
 reads the display resolution from the Display Matrix side data so the subtitle
 canvas matches, and never applies a `transpose` of its own.
+
+## Known limitations
+
+- A cue that would overflow the frame is scaled down as a whole rather than
+  wrapped onto a second line, since each word is positioned individually with
+  `\pos` and `WrapStyle: 2` disables ASS's own wrapping. Grouping and timing
+  are unaffected; only the on-screen size shrinks, governed by
+  `layout.max_width`.
+- The cleaning rules drop the first content line when it lacks terminal
+  punctuation (treated as a title), and treat a leading Roman numeral plus
+  period as a section heading. A genuine line of dialogue shaped like either
+  of those — e.g. `V. algo` — is silently dropped.
 
 ## Tests
 
