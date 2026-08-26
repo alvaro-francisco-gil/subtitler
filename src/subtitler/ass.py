@@ -59,18 +59,24 @@ def _pop_tags(style: Style) -> str:
 
 
 def _layout(cue: Cue, style: Style, width: int, measure) -> list[float]:
-    """Horizontal centre for each word, centring the cue as a group."""
+    """Horizontal centre for each word, centring the cue as a group.
+
+    The gap between words is the font's own space advance scaled by
+    `style.word_spacing`. Montserrat's space is about 0.29 of the font size,
+    which reads loose at heavy weights and short words, so the multiplier
+    exists to tighten it without changing the font.
+    """
     texts = [_render_text(word.text, style) for word in cue.words]
     widths = [measure(text) for text in texts]
-    space = measure(" ")
+    gap = measure(" ") * style.word_spacing
 
-    total = sum(widths) + space * (len(widths) - 1)
+    total = sum(widths) + gap * (len(widths) - 1)
     cursor = (width - total) / 2
 
     centres = []
     for word_width in widths:
         centres.append(cursor + word_width / 2)
-        cursor += word_width + space
+        cursor += word_width + gap
     return centres
 
 

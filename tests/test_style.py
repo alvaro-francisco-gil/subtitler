@@ -38,6 +38,7 @@ outline = "#000000"
 
 [layout]
 position = 0.72
+word_spacing = 0.55
 outline_width = 6.0
 shadow_depth = 3.0
 all_caps = true
@@ -59,6 +60,7 @@ pause_break = 0.35
     assert loaded.fill == "#FFFFFF"
     assert loaded.highlight == "#FFD400"
     assert loaded.position == 0.72
+    assert loaded.word_spacing == 0.55
     assert loaded.all_caps is True
     assert loaded.pop_scale == 1.08
     assert loaded.pop_ms == 140
@@ -83,6 +85,7 @@ highlight = "#FFD400"
 outline = "#000000"
 [layout]
 position = 0.5
+word_spacing = 1.0
 outline_width = 1.0
 shadow_depth = 1.0
 all_caps = false

@@ -23,6 +23,7 @@ def sty():
         highlight="#FFD400",
         outline="#000000",
         position=0.72,
+        word_spacing=1.0,
         outline_width=6.0,
         shadow_depth=3.0,
         all_caps=True,
@@ -129,3 +130,18 @@ def test_events_are_ordered_by_start_time(sty):
     events = [l for l in doc.splitlines() if l.startswith("Dialogue:")]
     starts = [e.split(",")[1] for e in events]
     assert starts == sorted(starts)
+
+
+def test_word_spacing_tightens_the_gap(sty):
+    """The gap is the font's space advance scaled by style.word_spacing."""
+    cue = Cue(words=(Word("AB", 0.0, 1.0), Word("CD", 1.0, 2.0)))
+
+    wide = ass.build_ass([cue], sty, 1000, 2000, stub_measure)
+    tight = ass.build_ass(
+        [cue], dataclasses.replace(sty, word_spacing=0.5), 1000, 2000, stub_measure
+    )
+
+    # Stub: glyphs are 50px, so a full space is 50px and half a space is 25px.
+    # Total width shrinks by 25px, so the left word moves right by 12.5px.
+    assert r"\pos(425,1440)" in wide
+    assert r"\pos(438,1440)" in tight
