@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from subtitler import probe as probe_module
 from subtitler import probe, render
 from subtitler.models import Cue, Word
 
@@ -167,3 +168,31 @@ def test_burn_works_from_a_path_containing_special_characters(tmp_path):
 
     assert out.exists()
     assert probe.probe(out).display_width == 1080
+
+
+def test_assert_complete_accepts_a_full_length_render(monkeypatch):
+    monkeypatch.setattr("subtitler.probe.probe", lambda path: _stub_info(600.0))
+
+    render._assert_complete(Path("/tmp/out.mp4"), 600.0)
+
+
+def test_assert_complete_rejects_a_short_render(monkeypatch):
+    monkeypatch.setattr("subtitler.probe.probe", lambda path: _stub_info(274.1))
+
+    with pytest.raises(render.TruncatedRenderError, match="274.1s but 691.1s"):
+        render._assert_complete(Path("/tmp/out.mp4"), 691.1)
+
+
+def test_assert_complete_tolerates_a_frame_of_slack(monkeypatch):
+    monkeypatch.setattr("subtitler.probe.probe", lambda path: _stub_info(9.96))
+
+    render._assert_complete(Path("/tmp/out.mp4"), 10.0)
+
+
+def _stub_info(duration: float):
+    return probe_module.MediaInfo(
+        stored_width=1920, stored_height=1080, rotation=-90,
+        display_width=1080, display_height=1920, fps=24.0,
+        duration=duration, color_transfer="bt709", color_primaries="bt709",
+        is_hdr=False,
+    )

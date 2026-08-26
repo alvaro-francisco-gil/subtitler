@@ -35,6 +35,15 @@ TONE_MAP_FILTERS = (
 SAFE_PATH = re.compile(r"^[A-Za-z0-9/._-]+$")
 
 
+# A render that stops early still exits 0, so the output length is checked
+# rather than trusted. One frame of slack absorbs rounding at the tail.
+TRUNCATION_TOLERANCE = 1.0
+
+
+class TruncatedRenderError(Exception):
+    """ffmpeg exited cleanly but wrote a shorter video than it was asked for."""
+
+
 class UnsafePathError(Exception):
     """A path that must reach ffmpeg's filter string contains characters we cannot escape."""
 
@@ -151,7 +160,28 @@ def burn(
                     f"libx264: {fallback_error}"
                 ) from fallback_error
 
+    expected = duration if duration is not None else info.duration - (start or 0.0)
+    _assert_complete(out, expected)
     return out
+
+
+def _assert_complete(out: Path, expected: float) -> None:
+    """Fail loudly when ffmpeg wrote a short file.
+
+    A read that stalls part-way through a large source can end the stream
+    early, and ffmpeg reports that as success. Silently handing back a
+    truncated video is the worst outcome available, so the length is checked
+    against what was asked for.
+    """
+    from .probe import probe
+
+    actual = probe(out).duration
+    if actual < expected - TRUNCATION_TOLERANCE:
+        raise TruncatedRenderError(
+            f"{out} is {actual:.1f}s but {expected:.1f}s was expected. "
+            f"ffmpeg exited cleanly, so the source read most likely ended early; "
+            f"re-run the render."
+        )
 
 
 def shift_cues(cues: list[Cue], start: float, end: float) -> list[Cue]:
