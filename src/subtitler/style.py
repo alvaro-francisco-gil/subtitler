@@ -32,6 +32,13 @@ class Style:
     outline_width: float
     shadow_depth: float
     all_caps: bool
+    title_size: int
+    title_position: float
+    title_line_spacing: float
+    title_hold: float
+    title_fade_ms: int
+    title_rise: float
+    title_stagger_ms: int
     pop_scale: float
     pop_ms: int
     max_words: int
@@ -66,6 +73,13 @@ def load(path: Path = DEFAULT_STYLE_PATH) -> Style:
         outline_width=float(data["layout"]["outline_width"]),
         shadow_depth=float(data["layout"]["shadow_depth"]),
         all_caps=bool(data["layout"]["all_caps"]),
+        title_size=int(data["title"]["size"]),
+        title_position=float(data["title"]["position"]),
+        title_line_spacing=float(data["title"]["line_spacing"]),
+        title_hold=float(data["title"]["hold"]),
+        title_fade_ms=int(data["title"]["fade_ms"]),
+        title_rise=float(data["title"]["rise"]),
+        title_stagger_ms=int(data["title"]["stagger_ms"]),
         pop_scale=float(data["animation"]["pop_scale"]),
         pop_ms=int(data["animation"]["pop_ms"]),
         max_words=int(data["cues"]["max_words"]),

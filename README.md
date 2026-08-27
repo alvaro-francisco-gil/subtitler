@@ -98,6 +98,19 @@ hardcoded in Python.
 | `layout.outline_width` | Outline thickness |
 | `layout.shadow_depth` | Drop shadow depth |
 | `layout.all_caps` | Uppercase the subtitles |
+| `title.size` | ASS `Fontsize` for the title card |
+| `title.position` | Vertical centre of the title block, as a fraction of frame height |
+| `title.line_spacing` | Multiple of the rendered em height |
+| `title.hold` | Seconds on screen, both fades included |
+| `title.fade_ms` | Fade in and fade out duration |
+| `title.rise` | How far each line travels up as it fades in, as a fraction of height |
+| `title.stagger_ms` | Delay between one line appearing and the next |
+
+Pass `--title "Some Title"` to either `sample` or `render` to add a title
+card; `--title-at` places it on the source timeline (default 2 seconds). It
+wraps to the frame, and each line fades in while rising slightly, one after
+another. A `sample` shows the title only when the window it renders actually
+contains it.
 
 `font.size` is not pixels per em. libass reads `Fontsize` as the height of the
 font's Windows line box, so the em it renders at is

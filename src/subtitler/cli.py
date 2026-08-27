@@ -131,9 +131,23 @@ def pipeline(video: Path, transcript: Path, style_path: Path, *, force: bool = F
     return PipelineResult(info=info, words=words, cues=cues, work=work)
 
 
-def _write_ass(cues: list[Cue], sty: style.Style, info: MediaInfo, path: Path) -> Path:
+def _write_ass(
+    cues: list[Cue],
+    sty: style.Style,
+    info: MediaInfo,
+    path: Path,
+    *,
+    title: str | None = None,
+    title_at: float = 0.0,
+) -> Path:
     measurer = measure.text_measurer(sty.font_path, sty.font_size)
-    document = ass.build_ass(cues, sty, info.display_width, info.display_height, measurer)
+    document = ass.build_ass(
+        cues, sty, info.display_width, info.display_height, measurer,
+        title=title,
+        title_at=title_at,
+        title_em=measure.rendered_em(sty.font_path, sty.title_size),
+        title_measure=measure.text_measurer(sty.font_path, sty.title_size),
+    )
     path.write_text(document)
     return path
 
@@ -157,7 +171,15 @@ def command_sample(args) -> int:
     end = start + args.len
 
     windowed = render.shift_cues(result.cues, start=start, end=end)
-    ass_path = _write_ass(windowed, sty, result.info, result.work.root / "sample.ass")
+    # The title is placed against the source timeline, so a sample only shows it
+    # when the window it renders actually contains it.
+    title_at = args.title_at - start
+    show_title = args.title is not None and start <= args.title_at < end
+    ass_path = _write_ass(
+        windowed, sty, result.info, result.work.root / "sample.ass",
+        title=args.title if show_title else None,
+        title_at=max(title_at, 0.0),
+    )
 
     out = args.out or args.video.with_name(f"{args.video.stem}_sample.mp4")
     print(f"rendering {args.len}s from {start:.1f}s -> {out}", file=sys.stderr)
@@ -174,7 +196,10 @@ def command_render(args) -> int:
     sty = style.load(args.style)
     result = pipeline(args.video, args.transcript, args.style, force=args.force)
 
-    ass_path = _write_ass(result.cues, sty, result.info, result.work.ass)
+    ass_path = _write_ass(
+        result.cues, sty, result.info, result.work.ass,
+        title=args.title, title_at=args.title_at,
+    )
     out = args.out or args.video.with_name(f"{args.video.stem}_subtitled.mp4")
 
     print(f"rendering full video -> {out}", file=sys.stderr)
@@ -200,6 +225,11 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--force", action="store_true", help="ignore cached artifacts")
         sub.add_argument("--encoder", default="h264_nvenc")
         sub.add_argument("--out", type=Path, default=None)
+        sub.add_argument("--title", default=None, help="title card text, shown once near the start")
+        sub.add_argument(
+            "--title-at", type=parse_timecode, default=2.0,
+            help="when the title card appears (default: 2)",
+        )
 
     sample = subparsers.add_parser("sample", help="render a short window to check the style")
     add_common(sample)

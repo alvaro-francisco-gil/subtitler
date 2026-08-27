@@ -37,8 +37,17 @@ def libass_size_ratio(font_path: Path) -> float:
     return units_per_em / line_box
 
 
+def rendered_em(font_path: Path, font_size: int) -> float:
+    """The em height in pixels that an ASS `Fontsize` produces on screen.
+
+    Vertical layout — stacking the lines of a title, say — needs this for the
+    same reason horizontal layout needs the scaled measurer.
+    """
+    return font_size * libass_size_ratio(font_path)
+
+
 def text_measurer(font_path: Path, font_size: int) -> Callable[[str], float]:
-    pixels_per_em = font_size * libass_size_ratio(font_path)
+    pixels_per_em = rendered_em(font_path, font_size)
     font = ImageFont.truetype(str(font_path), pixels_per_em)
 
     def measure(text: str) -> float:

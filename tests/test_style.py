@@ -44,6 +44,15 @@ outline_width = 6.0
 shadow_depth = 3.0
 all_caps = true
 
+[title]
+size = 150
+position = 0.42
+line_spacing = 1.18
+hold = 4.0
+fade_ms = 450
+rise = 0.018
+stagger_ms = 130
+
 [animation]
 pop_scale = 1.08
 pop_ms = 140
@@ -92,6 +101,15 @@ word_spacing = 1.0
 outline_width = 1.0
 shadow_depth = 1.0
 all_caps = false
+[title]
+size = 150
+position = 0.42
+line_spacing = 1.18
+hold = 4.0
+fade_ms = 450
+rise = 0.018
+stagger_ms = 130
+
 [animation]
 pop_scale = 1.0
 pop_ms = 0
