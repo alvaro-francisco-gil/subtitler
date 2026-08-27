@@ -171,6 +171,24 @@ Rotation is handled by ffmpeg's automatic rotation on decode. The pipeline
 reads the display resolution from the Display Matrix side data so the subtitle
 canvas matches, and never applies a `transpose` of its own.
 
+## Repairing collapsed alignment
+
+Forced alignment over a long recording sometimes stops tracking and flushes
+everything it skipped onto a single timestamp — a run of words sharing one
+start and end, preceded by a stretch of video with no subtitles at all. On the
+reference video this cost 12 seconds of speech.
+
+`repair` finds those spans and hands each one back to the aligner on its own,
+which recovers them: the failure belongs to the long pass, not to the audio or
+the transcript. Detection needs no tuning, because speech has a floor on how
+fast it can physically be — a window grows outward until its seconds-per-word
+becomes possible again, which is exactly where the timings can be trusted.
+
+A repair is accepted only if the aligner returns the same words in the same
+order *and* leaves fewer of them collapsed. The model loads lazily, so a video
+with nothing broken pays nothing, and repaired timings are cached with the
+alignment.
+
 ## Known limitations
 
 - A cue never wraps onto a second line: each word is positioned individually

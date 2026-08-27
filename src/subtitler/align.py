@@ -12,9 +12,12 @@ therefore running the fast unit tests, does not pull in torch.
 from __future__ import annotations
 
 import json
+import tempfile
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
+from . import extract
 from .models import Word
 
 
@@ -50,6 +53,34 @@ def align(
     model = stable_whisper.load_model(model_name, device=device)
     result = model.align(str(audio), script, language=language)
     return words_from_result(result.all_words())
+
+
+def realigner(
+    *,
+    model_name: str = "large-v3",
+    device: str = "cuda",
+    language: str = "es",
+) -> Callable[[Path, str, float, float], list[Word]]:
+    """Build the re-aligner `repair` needs, loading the model only if it is used.
+
+    Most videos have nothing to repair, and loading a 3 GB model to discover
+    that would undo the caching the sample loop depends on.
+    """
+    model = None
+
+    def realign(audio: Path, text: str, start: float, end: float) -> list[Word]:
+        nonlocal model
+        if model is None:
+            import stable_whisper
+
+            model = stable_whisper.load_model(model_name, device=device)
+
+        with tempfile.TemporaryDirectory(prefix="subtitler-repair-") as staging:
+            span = Path(staging) / "span.wav"
+            extract.cut_audio(audio, span, start, end)
+            return words_from_result(model.align(str(span), text, language=language).all_words())
+
+    return realign
 
 
 def save_words(words: list[Word], path: Path) -> None:

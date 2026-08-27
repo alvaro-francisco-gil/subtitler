@@ -14,7 +14,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from . import align, ass, binaries, clean, drift, extract, group, measure, probe, render, style, workdir
+from . import align, ass, binaries, clean, drift, extract, group, measure, probe, render, repair, style, workdir
 from .models import Cue, Word
 from .probe import MediaInfo
 
@@ -88,6 +88,14 @@ def pipeline(video: Path, transcript: Path, style_path: Path, *, force: bool = F
     if force or not workdir.is_fresh(work.words, work.audio, work.script):
         print("aligning transcript to audio (this is the slow part)", file=sys.stderr)
         words = align.align(work.audio, cleaned.text)
+        broken = repair.broken_spans(words)
+        if broken:
+            print(
+                f"re-aligning {len(broken)} span(s) the aligner collapsed",
+                file=sys.stderr,
+            )
+            words = repair.repair(work.audio, words, align.realigner())
+        # Repaired timings are cached with the rest, so this is paid once.
         align.save_words(words, work.words)
     else:
         words = align.load_words(work.words)

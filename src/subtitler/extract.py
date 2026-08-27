@@ -28,6 +28,27 @@ def extract_audio(video: Path, out: Path) -> Path:
     return out
 
 
+def cut_audio(audio: Path, out: Path, start: float, end: float) -> Path:
+    """Copy the samples between two timestamps into their own file.
+
+    `-ss` and `-t` go before `-i` so ffmpeg seeks rather than decoding from
+    zero, and the stream is copied rather than re-encoded — this runs once per
+    repaired span and should cost nothing.
+    """
+    out.parent.mkdir(parents=True, exist_ok=True)
+    binaries.run([
+        binaries.ffmpeg(),
+        "-y",
+        "-v", "error",
+        "-ss", f"{start:.3f}",
+        "-t", f"{end - start:.3f}",
+        "-i", str(audio),
+        "-c", "copy",
+        str(out),
+    ])
+    return out
+
+
 def audio_info(path: Path) -> dict:
     result = binaries.run([
         binaries.ffprobe(),
