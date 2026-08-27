@@ -1,0 +1,29 @@
+[project]
+name = "subtitler"
+version = "0.1.0"
+description = "Burn karaoke-style subtitles into a video from a supplied transcript"
+requires-python = ">=3.12"
+dependencies = [
+    "stable-ts>=2.17",
+    "pillow>=10.0",
+]
+
+[project.scripts]
+subtitler = "subtitler.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/subtitler"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: requires a CUDA device and downloads a model",
+    "slow: invokes ffmpeg on a real clip",
+]

@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.subtitler/
+dist/
+*.mov
+*.mp4
+!tests/fixtures/clip.mov
