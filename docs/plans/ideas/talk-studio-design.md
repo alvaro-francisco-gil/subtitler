@@ -208,8 +208,9 @@ talk-studio doctor
   into the `captions` and `clip` tools.
 - Plans follow the `docs/plans/{ideas,ready,ongoing}/` lifecycle; the existing
   `docs/superpowers/` files move there when implementation starts.
-- Nothing personal is committed to the tool repo: no source transcripts, recordings
-  or project folders. Projects live beside the material they describe.
+- Project material stays out of the tool repo: no source transcripts, recordings
+  or project folders. Projects live beside the material they describe; test fixtures
+  are the exception.
 
 ## Build order
 
