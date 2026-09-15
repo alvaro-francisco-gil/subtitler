@@ -10,7 +10,7 @@ def test_parses_timecodes():
     assert parse_timecode("0:05.5") == 5.5
 
 
-@pytest.mark.parametrize("bad", ["banana", "-5", "-1:30", "1:2:3:4", ""])
+@pytest.mark.parametrize("bad", ["banana", "-5", "-1:30", "1:2:3:4", "", "2:-30"])
 def test_rejects_bad_timecodes(bad):
     with pytest.raises(ValueError):
         parse_timecode(bad)

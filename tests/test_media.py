@@ -57,3 +57,21 @@ def test_validate_rejects_a_missing_stream(tmp_path):
     wav = make_media(tmp_path / "a.wav", seconds=2.0, video=False)
     with pytest.raises(media.RenderError, match="no video stream"):
         media.validate(wav, expected=2.0, tolerance=0.1, streams=("video", "audio"))
+
+
+def test_validate_rejects_audio_video_drift(tmp_path):
+    # Create file with video and audio durations that differ by more than tolerance,
+    # but each is within tolerance of the expected duration.
+    # video ~6.08s (diff 0.08, within 0.1), audio ~5.97s (diff 0.03, within 0.1),
+    # but drift 0.11s which exceeds tolerance 0.1s
+    out = tmp_path / "drift.mp4"
+    binaries.run([
+        binaries.ffmpeg(), "-y", "-v", "error",
+        "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=6.08",
+        "-f", "lavfi", "-i", "sine=frequency=220:sample_rate=48000:duration=5.97",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+        "-map", "0:v", "-map", "1:a", str(out)
+    ])
+
+    with pytest.raises(media.RenderError, match="differ by more than"):
+        media.validate(out, expected=6.0, tolerance=0.1, streams=("video", "audio"))

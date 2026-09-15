@@ -12,6 +12,8 @@ def parse_timecode(value: str) -> float:
     parts = value.strip().split(":")
     if len(parts) > 3 or not all(NUMBER_RE.fullmatch(part.strip()) for part in parts):
         raise ValueError(f"could not parse timecode {value!r}")
+    if any("-" in part for part in parts):
+        raise ValueError(f"could not parse timecode {value!r}")
     seconds = 0.0
     for part in parts:
         seconds = seconds * 60 + float(part)
