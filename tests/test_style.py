@@ -1,6 +1,6 @@
 import pytest
 
-from subtitler import style
+from talk_studio.captions import style
 
 
 @pytest.mark.parametrize(

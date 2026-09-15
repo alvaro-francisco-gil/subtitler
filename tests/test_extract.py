@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from subtitler import extract, probe
+from talk_studio import probe
+from talk_studio.captions import extract
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

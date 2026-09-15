@@ -1,8 +1,8 @@
 import pytest
 
-from subtitler import drift
-from subtitler.clean import SourcePos
-from subtitler.models import Word
+from talk_studio.captions import drift
+from talk_studio.captions.clean import SourcePos
+from talk_studio.captions.models import Word
 
 
 def w(text, start, end, score=1.0):
@@ -105,7 +105,7 @@ def test_a_sentence_absent_from_the_audio_is_flagged(tmp_path):
     """Align a script containing a sentence the speaker never said."""
     from pathlib import Path
 
-    from subtitler import align, extract
+    from talk_studio.captions import align, extract
 
     fixtures = Path(__file__).parent / "fixtures"
     audio = tmp_path / "audio.wav"

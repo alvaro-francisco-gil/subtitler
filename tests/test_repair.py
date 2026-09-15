@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from subtitler import repair
-from subtitler.models import Word
+from talk_studio.captions import repair
+from talk_studio.captions.models import Word
 
 AUDIO = Path("/tmp/audio.wav")
 

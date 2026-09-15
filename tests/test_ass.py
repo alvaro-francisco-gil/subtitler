@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from subtitler import ass
-from subtitler.models import Cue, Word
-from subtitler.style import Style
+from talk_studio.captions import ass
+from talk_studio.captions.models import Cue, Word
+from talk_studio.captions.style import Style
 
 
 def stub_measure(text: str) -> float:

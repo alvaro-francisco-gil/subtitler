@@ -1,29 +1,33 @@
 [project]
-name = "subtitler"
-version = "0.1.0"
-description = "Burn karaoke-style subtitles into a video from a supplied transcript"
+name = "talk-studio"
+version = "0.2.0"
+description = "Agents propose edits to a recorded talk; a human picks what feels right"
 requires-python = ">=3.12"
 dependencies = [
     "stable-ts>=2.17",
     "pillow>=10.0",
+    "numpy>=1.26",
+    "tomli-w>=1.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
 ]
 
 [project.scripts]
-subtitler = "subtitler.cli:main"
+talk-studio = "talk_studio.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/subtitler"]
+packages = ["src/talk_studio"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "gpu: requires a CUDA device and downloads a model",
-    "slow: invokes ffmpeg on a real clip",
+    "slow: downloads models or packages, or renders more than a few seconds",
 ]

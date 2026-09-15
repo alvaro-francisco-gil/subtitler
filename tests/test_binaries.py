@@ -1,6 +1,6 @@
 import pytest
 
-from subtitler import binaries
+from talk_studio import binaries
 
 
 def test_ffmpeg_prefers_path_binary(monkeypatch):

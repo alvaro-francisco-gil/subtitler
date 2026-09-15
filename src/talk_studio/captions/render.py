@@ -21,9 +21,9 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import binaries
+from .. import binaries
 from .models import Cue, Word
-from .probe import MediaInfo
+from ..probe import MediaInfo
 
 TONE_MAP_FILTERS = (
     "zscale=t=linear:npl=100",
@@ -173,7 +173,7 @@ def _assert_complete(out: Path, expected: float) -> None:
     truncated video is the worst outcome available, so the length is checked
     against what was asked for.
     """
-    from .probe import probe
+    from ..probe import probe
 
     actual = probe(out).duration
     if actual < expected - TRUNCATION_TOLERANCE:

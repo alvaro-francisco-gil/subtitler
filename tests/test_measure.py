@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import ImageFont
 
-from subtitler import measure
+from talk_studio.captions import measure
 
 FONT = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Montserrat-ExtraBold.ttf"
 
