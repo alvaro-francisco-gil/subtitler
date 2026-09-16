@@ -63,7 +63,7 @@ client of type *Desktop app*. Save its JSON as
 `uv run talk-studio youtube auth` and open the printed URL. The token is kept
 beside it and refreshed automatically.
 
-Agents: see [.agents/skills/talk-studio/SKILL.md](.agents/skills/talk-studio/SKILL.md).
+Agents: see [.agents/skills/talk-studio/SKILL.md](.agents/skills/talk-studio/SKILL.md) for editing, and [.agents/skills/publishing-talks-to-youtube/SKILL.md](.agents/skills/publishing-talks-to-youtube/SKILL.md) for YouTube.
 
 ## Captions
 
