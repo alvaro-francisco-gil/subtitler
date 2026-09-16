@@ -7,59 +7,61 @@
   <link rel="stylesheet" href="/static/review.css">
 </head>
 <body>
-  <header>
-    <h1>talk-studio</h1>
-    <span id="source"></span>
-    <nav id="decisions"></nav>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">▶</span>
+      <span>talk-studio</span>
+      <span id="source" class="source"></span>
+    </div>
+    <span id="remaining" class="remaining"></span>
   </header>
-  <main id="decision" hidden>
-    <h2 id="decision-title"></h2>
-    <p id="decision-status" class="muted"></p>
 
-    <div id="excerpts" class="row"></div>
+  <nav id="decisions" class="queue" aria-label="Choices waiting for you"></nav>
 
-    <div id="frame" hidden>
+  <main id="decision" class="card" hidden>
+    <div class="card-head">
+      <div>
+        <p id="decision-kind" class="eyebrow"></p>
+        <h1 id="decision-title"></h1>
+        <p id="decision-status" class="subtle"></p>
+      </div>
+      <div id="excerpts" class="segmented"></div>
+    </div>
+
+    <section id="frame" class="stage" hidden>
       <img id="frame-base" alt="Reference frame">
-      <img id="frame-over" alt="Selected candidate frame">
-      <div id="frame-divider"></div>
-    </div>
-    <p id="frame-hint" class="muted" hidden>Drag across the image: left of the line is the reference, right is the
-      selected candidate. <kbd>1</kbd>–<kbd>9</kbd> candidates · <kbd>0</kbd> reference everywhere.</p>
+      <img id="frame-over" alt="Selected version">
+      <div id="frame-divider"><span></span></div>
+    </section>
 
-    <div id="videos" hidden>
-      <div class="row">
-        <button id="video-play">Play all</button>
-        <span class="muted">All candidates play together; you hear the selected one. Click a video or press its number.</span>
-      </div>
+    <section id="videos" class="stage" hidden>
       <div id="video-grid"></div>
-    </div>
+    </section>
 
-    <div id="player" class="player row">
-      <button id="play">Play</button>
+    <section id="player" class="player">
+      <button id="play" class="round" aria-label="Play">▶</button>
       <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Position">
-      <span id="clock" class="muted">0:00</span>
-      <button id="sample-here" title="Add an excerpt around this moment and render every candidate on it">Sample here</button>
-    </div>
+      <span id="clock" class="clock">0:00</span>
+      <button id="sample-here" class="ghost small" title="Add an excerpt around this moment and render every version on it">Sample here</button>
+    </section>
 
-    <div id="candidates" class="row"></div>
-    <p id="audio-hint" class="muted">Keys: <kbd>1</kbd>–<kbd>9</kbd> candidates · <kbd>0</kbd> reference ·
-      <kbd>Space</kbd> play/pause. Levels are matched, so louder does not mean better.</p>
-
-    <form id="verdict">
-      <textarea id="note" rows="3" placeholder="What do you notice? Optional for a pick, useful for a reject."></textarea>
-      <div class="row">
-        <button type="button" id="pick">Pick selected</button>
-        <button type="button" id="reject">Reject round</button>
-      </div>
-    </form>
-
-    <p id="reveal"></p>
-
-    <details id="history">
-      <summary>Previous rounds</summary>
-      <div id="history-list"></div>
-    </details>
+    <div id="candidates" class="segmented big"></div>
+    <p id="hint" class="hint"></p>
   </main>
+
+  <section id="done" class="card empty" hidden>
+    <div class="check">✓</div>
+    <h1>All caught up</h1>
+    <p class="subtle">Nothing is waiting for your eye or ear. New rounds appear here when they are ready.</p>
+  </section>
+
+  <footer id="verdict" class="actionbar" hidden>
+    <input id="note" type="text" placeholder="Add a note (optional for a pick, useful for a reject)" autocomplete="off">
+    <button type="button" id="reject" class="ghost">Reject round</button>
+    <button type="button" id="pick" class="primary">Pick</button>
+  </footer>
+
+  <div id="toast" class="toast" hidden></div>
   <script src="/static/review.js"></script>
 </body>
 </html>

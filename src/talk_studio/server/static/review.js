@@ -2,7 +2,7 @@
 
 const $ = (id) => document.getElementById(id);
 const state = {
-  decision: null, view: null, duration: 0, excerpt: 0, selected: "original",
+  decision: null, view: null, queue: [], duration: 0, excerpt: 0, selected: "original",
   ctx: null, buffers: {}, gains: {}, sources: [], playing: false, startedAt: 0, offset: 0, poll: null, split: 50,
 };
 
@@ -24,27 +24,67 @@ function fmt(seconds) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-async function loadProject() {
+function toast(text) {
+  const el = $("toast");
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(el.timer);
+  el.timer = setTimeout(() => { el.hidden = true; }, 1600);
+}
+
+// names
+
+const TITLES = { audio: "Audio clean-up", master: "Mastering", grade: "Colour" };
+const KINDS = { audio: "Listen", image: "Look", video: "Short" };
+
+function title(name) {
+  if (TITLES[name]) return TITLES[name];
+  const slug = name.replace(/^clip-/, "").replaceAll("-", " ");
+  return slug.charAt(0).toUpperCase() + slug.slice(1);
+}
+
+// the queue: only decisions with a round waiting for a verdict
+
+async function loadProject(preferred) {
   const project = await api("/api/project");
   $("source").textContent = project.source;
   state.duration = project.duration;
+  state.queue = project.decisions.filter((d) => d.open_round).map((d) => d.name);
+
   const nav = $("decisions");
   nav.replaceChildren();
-  for (const d of project.decisions) {
+  for (const name of state.queue) {
     const b = document.createElement("button");
-    b.textContent = `${d.name} · ${d.status}${d.open_round ? " · to review" : ""}`;
-    b.dataset.decision = d.name;
-    b.onclick = () => openDecision(d.name);
+    b.textContent = title(name);
+    b.dataset.decision = name;
+    b.onclick = () => openDecision(name);
     nav.append(b);
   }
-  // Land on the round waiting for a verdict: a picked decision has nothing to play.
-  const waiting = project.decisions.find((d) => d.open_round);
-  const first = state.decision || (waiting || project.decisions[0])?.name;
-  if (first) await openDecision(first);
+  const left = state.queue.length;
+  $("remaining").textContent = left ? `${left} to review` : "All done";
+
+  if (!left) {
+    stop();
+    pauseVideos();
+    state.view = null;
+    $("decision").hidden = true;
+    $("verdict").hidden = true;
+    $("done").hidden = false;
+    schedulePoll();
+    return;
+  }
+  $("done").hidden = true;
+  const target = state.queue.includes(preferred) ? preferred : state.queue[0];
+  await openDecision(target);
 }
 
 async function openDecision(name) {
   stop();
+  if (state.decision !== name) {
+    pauseVideos();
+    state.excerpt = 0;
+    state.selected = "original";
+  }
   state.decision = name;
   state.view = await api(`/api/decisions/${name}`);
   state.excerpt = Math.min(state.excerpt, Math.max(state.view.excerpts.length - 1, 0));
@@ -71,52 +111,6 @@ function available(label) {
   return isImage() || isVideo() ? measured(label) : Boolean(state.buffers[label]);
 }
 
-function drawVideos() {
-  const grid = $("video-grid");
-  const key = `${state.view.name}/${state.view.open_round}/${state.excerpt}/${playable().join(",")}`;
-  if (grid.dataset.key !== key) {
-    grid.dataset.key = key;
-    grid.replaceChildren();
-    for (const label of playable()) {
-      const figure = document.createElement("figure");
-      figure.dataset.label = label;
-      const video = document.createElement("video");
-      video.src = sampleUrl(label, "mp4");
-      video.preload = "auto";
-      video.playsInline = true;
-      const caption = document.createElement("figcaption");
-      const index = state.view.candidates.findIndex((c) => c.label === label);
-      caption.textContent = label === "original" ? `0 · ${state.view.reference}` : `${index + 1} · ${label}`;
-      figure.append(video, caption);
-      figure.onclick = () => select(label);
-      grid.append(figure);
-    }
-  }
-  for (const figure of grid.children) {
-    const on = figure.dataset.label === state.selected;
-    figure.classList.toggle("on", on);
-    figure.querySelector("video").muted = !on;
-  }
-}
-
-function videosPlaying() {
-  return [...$("video-grid").querySelectorAll("video")].some((v) => !v.paused);
-}
-
-function toggleVideos() {
-  const videos = [...$("video-grid").querySelectorAll("video")];
-  if (!videos.length) return;
-  if (videosPlaying()) {
-    videos.forEach((v) => v.pause());
-    $("video-play").textContent = "Play all";
-    return;
-  }
-  const lead = videos.find((v) => !v.muted) || videos[0];
-  const at = lead.currentTime >= lead.duration - 0.1 ? 0 : lead.currentTime;
-  videos.forEach((v) => { v.currentTime = at; v.play().catch(() => {}); });
-  $("video-play").textContent = "Pause all";
-}
-
 function playable() {
   const rendered = state.view.candidates
     .filter((c) => c.state === "rendered" && measured(c.label))
@@ -124,90 +118,78 @@ function playable() {
   return measured("original") ? ["original", ...rendered] : rendered;
 }
 
-function button(text, label) {
-  const b = document.createElement("button");
-  b.textContent = text;
-  if (label === state.selected) b.className = "on";
-  b.onclick = () => select(label);
-  return b;
+function labelText(label) {
+  return label === "original" ? state.view.reference : label;
 }
+
+// rendering
 
 function render() {
   const v = state.view;
+  if (!v) return;
   $("decision").hidden = false;
-  $("decision-title").textContent = v.name;
+  $("verdict").hidden = !v.open_round;
+  $("decision-kind").textContent = KINDS[v.kind] || "";
+  $("decision-title").textContent = title(v.name);
   for (const b of $("decisions").children) b.classList.toggle("on", b.dataset.decision === v.name);
+
+  const excerpt = v.excerpts[state.excerpt];
+  const pending = v.candidates.filter((c) => c.state === "pending" || (c.state === "rendered" && !measured(c.label))).length;
+  const count = v.candidates.length;
   $("decision-status").textContent = v.blocked
-    ? `Waiting · ${v.blocked}`
-    : v.open_round ? `Round ${v.open_round} · ${v.status}` : `No open round · ${v.status}`;
+    ? v.blocked
+    : pending ? `Rendering ${pending} of ${count} versions…`
+    : isVideo() && excerpt ? `${count} versions · ${fmt(excerpt.start)}–${fmt(excerpt.end)} · ${Math.round(excerpt.end - excerpt.start)} s`
+    : `${count} versions`;
 
   const excerpts = $("excerpts");
   excerpts.replaceChildren();
-  v.excerpts.forEach((e, i) => {
-    const b = document.createElement("button");
-    b.textContent = isImage() ? fmt(e.start) : e.label;
-    if (i === state.excerpt) b.className = "on";
-    b.onclick = async () => { stop(); state.excerpt = i; state.offset = 0; render(); await loadBuffers(); schedulePoll(); };
-    excerpts.append(b);
-  });
-
-  const candidates = $("candidates");
-  const originalButton = button(`0 · ${v.reference}`, "original");
-  if (!measured("original")) {
-    originalButton.disabled = true;
-    originalButton.textContent += " · rendering…";
+  if (v.excerpts.length > 1) {
+    v.excerpts.forEach((e, i) => {
+      const b = document.createElement("button");
+      b.textContent = fmt(e.start);
+      if (i === state.excerpt) b.className = "on";
+      b.onclick = async () => { stop(); pauseVideos(); state.excerpt = i; state.offset = 0; render(); await loadBuffers(); schedulePoll(); };
+      excerpts.append(b);
+    });
   }
-  candidates.replaceChildren(originalButton);
-  v.candidates.forEach((c, i) => {
-    const b = button(`${i + 1} · ${c.label}`, c.label);
-    if (c.state !== "rendered" || !measured(c.label)) {
-      b.disabled = true;
-      b.textContent += c.state === "failed" ? " · failed" : " · rendering…";
-    }
-    candidates.append(b);
-    if (c.error) {
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.textContent = `${c.label} log`;
-      const pre = document.createElement("pre");
-      pre.textContent = c.error;
-      details.append(summary, pre);
-      candidates.append(details);
-    }
-  });
 
-  $("verdict").hidden = !v.open_round;
   const image = isImage();
   const video = isVideo();
   $("frame").hidden = !image;
-  $("frame-hint").hidden = !image;
   $("videos").hidden = !video;
-  $("player").hidden = image || video;
-  $("audio-hint").hidden = image || video;
+  $("sample-here").hidden = image || video;
+  $("player").hidden = image;
+  $("candidates").hidden = video;
+
+  const candidates = $("candidates");
+  candidates.replaceChildren();
+  const pill = (label, index) => {
+    const b = document.createElement("button");
+    b.textContent = labelText(label);
+    b.title = `Key ${index}`;
+    if (label === state.selected) b.className = "on";
+    b.disabled = !available(label);
+    b.onclick = () => select(label);
+    candidates.append(b);
+  };
+  pill("original", 0);
+  v.candidates.forEach((c, i) => pill(c.label, i + 1));
+
   if (image) drawFrame();
   if (video) drawVideos();
-  const ready = Boolean(state.buffers.original);
-  $("play").disabled = !ready && !state.playing;
-  $("play").title = ready ? "" : v.open_round ? "Loading samples…" : "Nothing to play: this decision has no open round.";
-  $("pick").disabled = state.selected === "original";
 
-  const list = $("history-list");
-  list.replaceChildren();
-  for (const round of v.history) {
-    const heading = document.createElement("h4");
-    heading.textContent = `Round ${round.round}`;
-    const verdicts = document.createElement("p");
-    verdicts.textContent = round.verdicts
-      .map((x) => `${x.verdict}${x.candidate ? ` ${x.candidate}` : ""}${x.note ? ` — “${x.note}”` : ""}`)
-      .join("; ");
-    const items = document.createElement("ul");
-    for (const c of round.candidates) {
-      const li = document.createElement("li");
-      li.textContent = `${c.label} (${c.id}): ${c.tool} ${JSON.stringify(c.settings)} [${c.state}]`;
-      items.append(li);
-    }
-    list.append(heading, verdicts, items);
-  }
+  const ready = video ? playable().length > 0 : Boolean(state.buffers.original);
+  $("play").disabled = !ready && !state.playing;
+  $("hint").innerHTML = video
+    ? "Every version plays together; you hear the highlighted one. <kbd>1</kbd>–<kbd>9</kbd> to switch, <kbd>Space</kbd> to play, <kbd>Enter</kbd> to pick."
+    : image
+      ? "Drag across the image: reference on the left, the selected version on the right. <kbd>1</kbd>–<kbd>9</kbd> to switch, <kbd>Enter</kbd> to pick."
+      : "Levels are matched, so louder never wins. <kbd>1</kbd>–<kbd>9</kbd> to switch, <kbd>0</kbd> reference, <kbd>Space</kbd> to play, <kbd>Enter</kbd> to pick.";
+
+  const pick = $("pick");
+  pick.disabled = state.selected === "original" || !available(state.selected);
+  pick.textContent = state.selected === "original" ? "Select a version" : `Pick ${state.selected}`;
 }
 
 function drawFrame() {
@@ -220,16 +202,85 @@ function drawFrame() {
   $("frame-divider").style.left = `${state.split}%`;
 }
 
+function videos() {
+  return [...$("video-grid").querySelectorAll("video")];
+}
+
+function drawVideos() {
+  const grid = $("video-grid");
+  const key = `${state.view.name}/${state.view.open_round}/${state.excerpt}/${playable().join(",")}`;
+  if (grid.dataset.key !== key) {
+    pauseVideos();
+    grid.dataset.key = key;
+    grid.replaceChildren();
+    // Candidates first; the wide reference last, where it reads as context.
+    for (const label of [...playable().filter((l) => l !== "original"), ...playable().filter((l) => l === "original")]) {
+      const figure = document.createElement("figure");
+      figure.className = label === "original" ? "vcard wide" : "vcard";
+      figure.dataset.label = label;
+      const video = document.createElement("video");
+      video.src = sampleUrl(label, "mp4");
+      video.preload = "auto";
+      video.playsInline = true;
+      video.ontimeupdate = () => { if (!video.muted) tickVideo(video); };
+      video.onended = () => { if (!video.muted) { pauseVideos(); } };
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      const index = state.view.candidates.findIndex((c) => c.label === label);
+      badge.textContent = label === "original" ? `0 · ${state.view.reference}` : `${index + 1} · ${label}`;
+      const sound = document.createElement("span");
+      sound.className = "sound";
+      sound.textContent = "♪ sound";
+      figure.append(video, badge, sound);
+      figure.onclick = () => select(label);
+      grid.append(figure);
+    }
+  }
+  for (const figure of grid.children) {
+    const on = figure.dataset.label === state.selected;
+    figure.classList.toggle("on", on);
+    figure.querySelector("video").muted = !on;
+  }
+}
+
+function videosPlaying() {
+  return videos().some((v) => !v.paused);
+}
+
+function pauseVideos() {
+  videos().forEach((v) => v.pause());
+  if (isVideo()) $("play").textContent = "▶";
+}
+
+function leadVideo() {
+  const all = videos();
+  return all.find((v) => !v.muted) || all[0];
+}
+
+function toggleVideos() {
+  const all = videos();
+  if (!all.length) return;
+  if (videosPlaying()) {
+    pauseVideos();
+    return;
+  }
+  const lead = leadVideo();
+  const at = lead.currentTime >= lead.duration - 0.1 ? 0 : lead.currentTime;
+  all.forEach((v) => { v.currentTime = at; v.play().catch(() => {}); });
+  $("play").textContent = "❚❚";
+}
+
+function tickVideo(video) {
+  const length = video.duration || 0;
+  $("seek").value = length ? Math.round((video.currentTime / length) * 1000) : 0;
+  $("clock").textContent = `${fmt(video.currentTime)} / ${fmt(length)}`;
+}
+
 async function loadBuffers() {
   const v = state.view;
   state.buffers = {};
-  if (isVideo()) {
-    render();
-    return;
-  }
-  if (isImage()) {
-    // Warm the browser cache so switching candidates is instant.
-    for (const label of playable()) new Image().src = sampleUrl(label, "jpg");
+  if (isVideo() || isImage()) {
+    if (isImage()) for (const label of playable()) new Image().src = sampleUrl(label, "jpg");
     render();
     return;
   }
@@ -250,6 +301,8 @@ async function loadBuffers() {
   tick();
 }
 
+// audio playback: every sample plays in lock-step, only the selected one is audible
+
 function matchedGain(label) {
   const levels = Object.values(state.view.loudness)
     .map((perExcerpt) => perExcerpt[state.excerpt])
@@ -266,7 +319,7 @@ function position() {
 }
 
 function play() {
-  if (isImage() || !state.buffers.original) return;
+  if (isImage() || isVideo() || !state.buffers.original) return;
   state.ctx.resume();
   const when = state.ctx.currentTime + 0.05;
   state.sources = [];
@@ -289,7 +342,7 @@ function play() {
   };
   state.startedAt = when - state.offset;
   state.playing = true;
-  $("play").textContent = "Pause";
+  $("play").textContent = "❚❚";
   requestAnimationFrame(loop);
 }
 
@@ -301,11 +354,11 @@ function stop() {
     try { source.stop(); } catch (_) { /* already stopped */ }
   }
   state.sources = [];
-  $("play").textContent = "Play";
+  $("play").textContent = "▶";
 }
 
 function select(label) {
-  if (!available(label)) return;
+  if (!state.view || !available(label)) return;
   state.selected = label;
   if (state.playing) {
     const now = state.ctx.currentTime;
@@ -333,43 +386,60 @@ function loop() {
 function schedulePoll() {
   clearTimeout(state.poll);
   const v = state.view;
-  // Every excerpt, not just the one on screen: a background re-render (e.g.
-  // after "Sample here" adds a new excerpt) can be in flight for an excerpt
-  // the user has since navigated away from, and polling must not stop while
-  // that render is still pending.
-  const waiting = v.candidates.some((c) => c.state === "pending")
+  // With nothing on screen, keep checking for new rounds. Otherwise poll while
+  // any sample of any excerpt is still rendering.
+  const waiting = !v
+    || v.candidates.some((c) => c.state === "pending")
     || Object.values(v.ready || {}).some((perExcerpt) => perExcerpt.some((x) => x !== true));
   if (!waiting) return;
   state.poll = setTimeout(async () => {
     if (state.playing || (isVideo() && videosPlaying())) return schedulePoll();
     try {
-      await openDecision(state.decision);
+      if (!state.view) await loadProject();
+      else await openDecision(state.decision);
     } catch (error) {
-      // A transient fetch failure must not silently end polling for the
-      // session — keep trying on the same schedule.
+      // A transient fetch failure must not silently end polling for the session.
       schedulePoll();
     }
   }, 3000);
 }
 
+// verdicts move straight on to the next choice
+
 async function verdict(kind) {
   const body = { verdict: kind, note: $("note").value };
   if (kind === "pick") body.label = state.selected;
+  const current = state.decision;
+  const index = state.queue.indexOf(current);
   try {
-    const result = await post(`/api/decisions/${state.decision}/feedback`, body);
-    $("note").value = "";
-    $("reveal").textContent = "Revealed: " + result.revealed
-      .map((c) => `${c.label} = ${c.tool} ${JSON.stringify(c.settings)}`)
-      .join(" · ");
-    state.selected = "original";
-    await loadProject();
+    await post(`/api/decisions/${current}/feedback`, body);
   } catch (error) {
-    alert(error.message);
+    toast(error.message);
+    return;
   }
+  $("note").value = "";
+  stop();
+  pauseVideos();
+  toast(kind === "pick" ? `Picked ${body.label} for ${title(current)}` : `Sent back ${title(current)}`);
+  const rest = state.queue.filter((name) => name !== current);
+  const next = rest[index] || rest[0];
+  await loadProject(next);
 }
 
-$("play").onclick = () => (state.playing ? stop() : play());
+$("play").onclick = () => {
+  if (isVideo()) toggleVideos();
+  else state.playing ? stop() : play();
+};
 $("seek").oninput = () => {
+  if (isVideo()) {
+    const all = videos();
+    const lead = leadVideo();
+    if (!lead || !lead.duration) return;
+    const at = (Number($("seek").value) / 1000) * lead.duration;
+    all.forEach((v) => { v.currentTime = at; });
+    tickVideo(lead);
+    return;
+  }
   const length = state.buffers.original?.duration || 0;
   const wasPlaying = state.playing;
   stop();
@@ -379,7 +449,11 @@ $("seek").oninput = () => {
 };
 $("pick").onclick = () => verdict("pick");
 $("reject").onclick = () => {
-  if (!$("note").value.trim() && !confirm("Reject without a note? The agent learns more from one.")) return;
+  if (!$("note").value.trim()) {
+    $("note").focus();
+    toast("Add a note so the next round can improve");
+    return;
+  }
   verdict("reject");
 };
 $("sample-here").onclick = async () => {
@@ -392,18 +466,21 @@ $("sample-here").onclick = async () => {
     await post(`/api/decisions/${state.decision}/excerpts`, { start, end });
     await openDecision(state.decision);
   } catch (error) {
-    alert(error.message);
+    toast(error.message);
   }
 };
 
 document.addEventListener("keydown", (event) => {
-  if (event.target.tagName === "TEXTAREA" || !state.view) return;
-  if (event.code === "Space" && isVideo()) {
+  if (event.target.tagName === "INPUT" && event.target.type === "text") {
+    if (event.key === "Escape") event.target.blur();
+    return;
+  }
+  if (!state.view) return;
+  if (event.code === "Space") {
     event.preventDefault();
-    toggleVideos();
-  } else if (event.code === "Space" && !isImage()) {
-    event.preventDefault();
-    state.playing ? stop() : play();
+    $("play").click();
+  } else if (event.key === "Enter") {
+    if (!$("pick").disabled) verdict("pick");
   } else if (event.key === "0") {
     select("original");
   } else if (/^[1-9]$/.test(event.key)) {
@@ -411,8 +488,6 @@ document.addEventListener("keydown", (event) => {
     if (candidate) select(candidate.label);
   }
 });
-
-$("video-play").onclick = toggleVideos;
 
 function dragSplit(event) {
   const box = $("frame").getBoundingClientRect();

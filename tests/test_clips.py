@@ -95,3 +95,18 @@ def test_propose_accepts_clip_tools_for_clip_decisions(clip_project, capsys):
     assert cli.main(["propose", "clip-no-longer-the-job", "--tool", "follow-speaker", "--project", root]) == 0
     assert cli.main(["propose", "clip-no-longer-the-job", "--tool", "ffmpeg-eq", "--project", root]) == 1
     assert "tools for clip-no-longer-the-job" in capsys.readouterr().err
+
+
+def test_a_hook_adds_a_title_card_over_the_opening(words, tmp_path):
+    from talk_studio.tools.clips import HOOK_POSITION, write_ass
+    tool = FollowSpeaker()
+    plain = write_ass(words, Excerpt(1.0, 3.0), tool.settings({}), 0.72, tmp_path / "plain.ass").read_text()
+    hooked = write_ass(
+        words, Excerpt(1.0, 3.0), tool.settings({"hook": "  Programming is   no longer the job "}), 0.72, tmp_path / "hook.ass",
+    ).read_text()
+    titles = [line for line in hooked.splitlines() if line.startswith("Dialogue") and ",T," in line]
+    assert titles and not [line for line in plain.splitlines() if ",T," in line]
+    assert "Programming" in titles[0] and titles[0].startswith("Dialogue: 0,0:00:00.10,")
+    assert tool.settings({"hook": "  a   b "})["hook"] == "a b"
+    with pytest.raises(tools.ToolError, match="80 characters"):
+        tool.settings({"hook": "x" * 81})

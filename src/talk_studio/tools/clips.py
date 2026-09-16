@@ -130,11 +130,18 @@ def write_ass(words_path: Path, excerpt: Excerpt, settings: dict, position: floa
         position=position,
         font_size=int(round(base.font_size * settings["caption_size"])),
         max_words=int(settings["words_per_cue"]),
+        title_size=int(round(base.title_size * settings.get("hook_size", 0.75))),
+        title_position=HOOK_POSITION,
+        title_hold=settings.get("hook_seconds", 3.5),
     )
     words = [Word(**entry) for entry in json.loads(Path(words_path).read_text())]
     document = ass.build_ass(
         clip_cues(words, excerpt, sty), sty, OUT_WIDTH, OUT_HEIGHT,
         measure.text_measurer(sty.font_path, sty.font_size),
+        title=settings.get("hook") or None,
+        title_at=0.1,
+        title_em=measure.rendered_em(sty.font_path, sty.title_size),
+        title_measure=measure.text_measurer(sty.font_path, sty.title_size),
     )
     out.write_text(document)
     return out
@@ -146,7 +153,11 @@ CAPTION_PARAMS = (
     Param("highlight", "choice", "yellow", "colour of the word being spoken", choices=tuple(HIGHLIGHTS)),
     Param("caption_size", "float", 1.0, "caption size relative to the style file", 0.6, 1.6),
     Param("words_per_cue", "int", 3, "most words on screen at once", 1, 6),
+    Param("hook", "text", "", "a title over the opening seconds to stop the scroll; empty for none"),
+    Param("hook_size", "float", 0.75, "hook size relative to the style file's title size", 0.4, 1.3),
+    Param("hook_seconds", "float", 3.5, "how long the hook stays, fades included", 1.5, 8.0),
 )
+HOOK_POSITION = 0.17  # above the speaker's head in every layout
 
 GPU_ENCODER = ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "21", "-b:v", "0"]
 CPU_ENCODER = ["-c:v", "libx264", "-preset", "medium", "-crf", "20"]
@@ -201,7 +212,7 @@ class FollowSpeaker(ClipTool):
     """A 9:16 window that follows the speaker across the stage."""
 
     name = "follow-speaker"
-    version = "1"
+    version = "2"
     params = (
         Param("zoom", "float", 1.0, "1 uses the full height; higher crops tighter on the speaker", 1.0, 1.8),
         Param("caption_position", "float", 0.72, "centre of the captions, as a fraction of height", 0.15, 0.9),
@@ -220,7 +231,7 @@ class SlideAndSpeaker(ClipTool):
     """The slide above, the speaker below, captions on the seam."""
 
     name = "slide-and-speaker"
-    version = "1"
+    version = "2"
     params = (
         Param("split", "float", 0.42, "how much of the height the slide takes", 0.3, 0.6),
     ) + CAPTION_PARAMS
@@ -249,7 +260,7 @@ class BlurLetterbox(ClipTool):
     """The whole wide shot in a band, over a blurred, darkened copy of itself."""
 
     name = "blur-letterbox"
-    version = "1"
+    version = "2"
     params = (
         Param("band_centre", "float", 0.42, "centre of the wide shot, as a fraction of height", 0.2, 0.6),
         Param("blur", "int", 30, "background blur radius", 0, 60),

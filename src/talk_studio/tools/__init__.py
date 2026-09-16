@@ -23,7 +23,7 @@ class ToolError(Exception):
 @dataclass(frozen=True)
 class Param:
     name: str
-    kind: str  # float | int | bool | choice
+    kind: str  # float | int | bool | choice | text
     default: object
     help: str
     minimum: float | None = None
@@ -46,6 +46,10 @@ class Param:
                     value = False
                 else:
                     raise ValueError
+            elif self.kind == "text":
+                value = " ".join(str(raw).split())
+                if len(value) > 80:
+                    raise ToolError(f"{self.name} must be at most 80 characters, is {len(value)}")
             elif self.kind == "choice":
                 value = str(raw)
                 if value not in self.choices:
