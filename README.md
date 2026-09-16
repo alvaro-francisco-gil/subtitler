@@ -37,6 +37,32 @@ a matter of taste, so it is never a candidate: mastering candidates are judged a
 matched levels on tone and dynamics alone, and set to a -26 LUFS working level
 first so a compressor threshold means the same thing on every recording.
 
+## Publishing to YouTube
+
+The video file is uploaded by hand in YouTube Studio. Videos uploaded through the
+API by a Google Cloud project that has not passed YouTube's audit are locked to
+private permanently, so that one step stays manual. Everything after it is a
+command, driven by a `youtube.toml` kept beside the talk (see the docstring of
+`src/talk_studio/youtube.py` for the format):
+
+```bash
+uv run talk-studio youtube check youtube.toml        # offline: limits, chapters, files
+uv run talk-studio youtube latest                    # find the upload's id
+uv run talk-studio youtube apply youtube.toml --video <id>   # details, thumbnail, captions
+uv run talk-studio youtube privacy <id> public
+```
+
+`apply` never changes privacy and can be re-run; it replaces its own caption track.
+
+**One-time setup**, in the Google Cloud console signed in to the channel's account:
+create a project, enable *YouTube Data API v3*, configure the OAuth consent
+screen (External; publish it to production so the sign-in does not expire after
+seven days — the "unverified app" warning is expected), and create an OAuth
+client of type *Desktop app*. Save its JSON as
+`~/.config/talk-studio/youtube/client_secret.json`, then run
+`uv run talk-studio youtube auth` and open the printed URL. The token is kept
+beside it and refreshed automatically.
+
 Agents: see [.agents/skills/talk-studio/SKILL.md](.agents/skills/talk-studio/SKILL.md).
 
 ## Captions

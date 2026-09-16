@@ -14,7 +14,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from . import binaries, cache, excerpts, final, media, sampling, tools
+from . import binaries, cache, excerpts, final, media, sampling, tools, youtube
 from .project import Project, ProjectError
 from .timecode import parse_excerpt
 
@@ -206,6 +206,32 @@ def command_doctor(args) -> int:
     return 0 if all(r["ok"] for r in rows[:2]) else 1
 
 
+def command_youtube(args) -> int:
+    action = args.action
+    if action == "auth":
+        youtube.authorize(open_browser=args.open_browser, port=args.port)
+        found = youtube.channel(youtube.service())["snippet"]["title"]
+        emit(args, f"signed in; publishing to the channel {found!r}", {"channel": found})
+    elif action == "check":
+        metadata = youtube.load_metadata(args.metadata)
+        emit(args, f"{args.metadata} is valid: {len(youtube.chapters(metadata.description))} chapters, "
+             f"{len(metadata.captions)} caption tracks, thumbnail {'yes' if metadata.thumbnail else 'no'}",
+             {"title": metadata.title, "chapters": youtube.chapters(metadata.description)})
+    elif action == "latest":
+        uploads = youtube.latest_uploads(youtube.service(), args.count)
+        emit(args, "\n".join(f"{u['id']}  {u['privacy']:<8}  {u['published'][:10]}  {u['title']}" for u in uploads), uploads)
+    elif action == "apply":
+        metadata = youtube.load_metadata(args.metadata)
+        api = youtube.service()
+        video = args.video or youtube.latest_uploads(api, 1)[0]["id"]
+        done = youtube.apply(api, video, metadata)
+        emit(args, f"https://youtu.be/{video}\n  " + "\n  ".join(done), {"video": video, "done": done})
+    elif action == "privacy":
+        youtube.set_privacy(youtube.service(), args.video, args.privacy)
+        emit(args, f"https://youtu.be/{args.video} is now {args.privacy}", {"video": args.video, "privacy": args.privacy})
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="talk-studio",
@@ -263,6 +289,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None)
 
     command("status", command_status, "decisions, rounds and source state")
+
+    p = command("youtube", command_youtube, "publish metadata, thumbnail and captions to YouTube", project=False)
+    actions = p.add_subparsers(dest="action", required=True)
+    a = actions.add_parser("auth", help="sign in to the channel once")
+    a.add_argument("--open-browser", action="store_true")
+    a.add_argument("--port", type=int, default=8766)
+    a = actions.add_parser("check", help="validate a youtube.toml without calling the API")
+    a.add_argument("metadata", type=Path)
+    a = actions.add_parser("latest", help="the channel's latest uploads, drafts included")
+    a.add_argument("--count", type=int, default=5)
+    a = actions.add_parser("apply", help="set details, thumbnail and captions; privacy is left alone")
+    a.add_argument("metadata", type=Path)
+    a.add_argument("--video", help="video id; defaults to the latest upload")
+    a = actions.add_parser("privacy", help="make a video public, unlisted or private")
+    a.add_argument("video")
+    a.add_argument("privacy", choices=["public", "unlisted", "private"])
     command("doctor", command_doctor, "check binaries and tool requirements", project=False)
     sub.add_parser("captions", help="align a transcript and burn subtitles (the former subtitler)")
     return parser
@@ -280,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         return args.func(args)
-    except (ProjectError, tools.ToolError, binaries.BinaryError, media.RenderError, ValueError, OSError) as error:
+    except (ProjectError, tools.ToolError, binaries.BinaryError, media.RenderError, youtube.YouTubeError, ValueError, OSError) as error:
         print(f"talk-studio: {error}", file=sys.stderr)
         return 1
 
