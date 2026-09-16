@@ -25,7 +25,7 @@ from ..captions import ass, group, measure, style
 from ..captions.models import Word
 from ..captions.render import escape_filter_path
 from ..timecode import Excerpt
-from . import Param, Tool
+from . import Param, Tool, hooks
 
 OUT_WIDTH, OUT_HEIGHT = 1080, 1920
 TRACK_WIDTH, TRACK_HEIGHT, TRACK_FPS = 480, 270, 2
@@ -122,7 +122,8 @@ def clip_cues(words: list[Word], excerpt: Excerpt, sty: style.Style) -> list:
     return group.group_words(inside, max_words=sty.max_words, pause_break=sty.pause_break, fits=fits)
 
 
-def write_ass(words_path: Path, excerpt: Excerpt, settings: dict, position: float, out: Path) -> Path:
+def write_ass(words_path: Path, excerpt: Excerpt, settings: dict, position: float, out: Path) -> hooks.EmojiSpot | None:
+    """Write the captions and hook to `out`; returns where an emoji should be overlaid, if any."""
     base = style.load()
     sty = dataclasses.replace(
         base,
@@ -135,16 +136,27 @@ def write_ass(words_path: Path, excerpt: Excerpt, settings: dict, position: floa
         title_hold=settings.get("hook_seconds", 3.5),
     )
     words = [Word(**entry) for entry in json.loads(Path(words_path).read_text())]
+    hook_text, hook_style = settings.get("hook") or "", settings.get("hook_style", "fade")
+    plain = hook_style == "fade"
     document = ass.build_ass(
         clip_cues(words, excerpt, sty), sty, OUT_WIDTH, OUT_HEIGHT,
         measure.text_measurer(sty.font_path, sty.font_size),
-        title=settings.get("hook") or None,
-        title_at=0.1,
+        title=hook_text if plain and hook_text else None,
+        title_at=HOOK_AT,
         title_em=measure.rendered_em(sty.font_path, sty.title_size),
         title_measure=measure.text_measurer(sty.font_path, sty.title_size),
     )
+    spot = None
+    if hook_text and not plain:
+        hook = hooks.build(
+            hook_text, hook_style, settings.get("hook_emoji", ""), settings.get("hook_size", 1.0),
+            HOOK_AT, sty.title_hold, HOOK_POSITION, OUT_WIDTH, OUT_HEIGHT,
+        )
+        head, events = document.split("\n\n[Events]\n", 1)
+        document = head + "\n" + "\n".join(hook.styles) + "\n\n[Events]\n" + events + "\n" + "\n".join(hook.events) + "\n"
+        spot = hook.emoji
     out.write_text(document)
-    return out
+    return spot
 
 
 # the tools
@@ -154,10 +166,14 @@ CAPTION_PARAMS = (
     Param("caption_size", "float", 1.0, "caption size relative to the style file", 0.6, 1.6),
     Param("words_per_cue", "int", 3, "most words on screen at once", 1, 6),
     Param("hook", "text", "", "a title over the opening seconds to stop the scroll; empty for none"),
-    Param("hook_size", "float", 0.75, "hook size relative to the style file's title size", 0.4, 1.3),
+    Param("hook_style", "choice", "fade", "fade: the plain title card; slam, sticker, comic: animated word by word",
+          choices=hooks.STYLES),
+    Param("hook_size", "float", 0.75, "hook size: for fade relative to the style file's title, otherwise to the style's own size", 0.4, 1.3),
+    Param("hook_emoji", "text", "", "an emoji after the hook's last word (styles other than fade)"),
     Param("hook_seconds", "float", 3.5, "how long the hook stays, fades included", 1.5, 8.0),
 )
 HOOK_POSITION = 0.17  # above the speaker's head in every layout
+HOOK_AT = 0.1
 
 GPU_ENCODER = ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "21", "-b:v", "0"]
 CPU_ENCODER = ["-c:v", "libx264", "-preset", "medium", "-crf", "20"]
@@ -177,16 +193,23 @@ class ClipTool(Tool):
         framed, position = self.graph(source, excerpt, settings, info.display_width, info.display_height)
         out.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="talk-studio-clip-") as staging:
+            inputs = ["-ss", f"{excerpt.start:.3f}", "-t", f"{excerpt.duration:.3f}", "-i", str(source)]
             if self.captions:
                 if words is None:
                     raise media.RenderError("this project has no word timings for captions; pass --words to `clips add`")
-                subtitles = write_ass(words, excerpt, settings, position, Path(staging) / "captions.ass")
-                framed += f";[framed]subtitles={escape_filter_path(subtitles)}:fontsdir={escape_filter_path(FONTS)}[out]"
+                subtitles = Path(staging) / "captions.ass"
+                spot = write_ass(words, excerpt, settings, position, subtitles)
+                framed += f";[framed]subtitles={escape_filter_path(subtitles)}:fontsdir={escape_filter_path(FONTS)}"
+                if spot:
+                    inputs += ["-loop", "1", "-framerate", "30", "-i", str(hooks.emoji_image(spot.text))]
+                    framed += "[subbed];" + hooks.emoji_overlay(spot, 1, "subbed", "out")
+                else:
+                    framed += "[out]"
             else:
                 framed += ";[framed]null[out]"
             head = [
-                binaries.ffmpeg(), "-y", "-v", "error", "-ss", f"{excerpt.start:.3f}", "-t", f"{excerpt.duration:.3f}",
-                "-i", str(source), "-filter_complex", framed, "-map", "[out]", "-map", "0:a:0",
+                binaries.ffmpeg(), "-y", "-v", "error", *inputs,
+                "-filter_complex", framed, "-map", "[out]", "-map", "0:a:0",
             ]
             tail = ["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)]
             try:
