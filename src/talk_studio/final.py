@@ -1,0 +1,39 @@
+"""The final render, from picks only.
+
+Step 1 knows one decision: the picked audio treatment is applied to the whole
+source and muxed back under the untouched video stream.
+"""
+
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+
+from . import binaries, cache, media, probe, tools
+from .project import Project, ProjectError
+
+
+def render(project: Project, out: Path | None = None) -> Path:
+    project.check_source()
+    decision = project.decision("audio")
+    if decision.status != "picked":
+        raise ProjectError(f"audio is {decision.status}; pick a candidate in the review page first")
+    candidate = next(c for c in project.candidates("audio") if c.id == decision.pick)
+    tool = tools.get_tool(candidate.tool)
+
+    out = out or cache.render_path(project.root, f"{project.source.stem}-final.mp4")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="talk-studio-render-") as staging:
+        audio = tool.apply(project.source, candidate.settings, Path(staging) / "audio.wav")
+        binaries.run([
+            binaries.ffmpeg(), "-y", "-v", "error",
+            "-i", str(project.source), "-i", str(audio),
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart", str(out),
+        ])
+
+    fps = probe.probe(project.source).fps
+    tolerance = max(1 / fps, media.AUDIO_TOLERANCE) if fps else media.AUDIO_TOLERANCE
+    media.validate(out, expected=project.duration, tolerance=tolerance, streams=("video", "audio"))
+    return out
