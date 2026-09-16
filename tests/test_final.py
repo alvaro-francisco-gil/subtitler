@@ -102,3 +102,43 @@ def test_render_accepts_a_source_whose_streams_disagree(drifted_project, tmp_pat
     out_durations = media.stream_durations(out)
     assert out_durations["video"] == pytest.approx(src["video"], abs=0.05)
     assert out_durations["audio"] == pytest.approx(src["audio"], abs=0.05)
+
+
+def pick_audio(project):
+    chain = tools.get_tool("ffmpeg-chain")
+    project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": 20}), "test")
+    sampling.render_round(project, "audio")
+    project.record("audio", "pick", label="A")
+
+
+def test_the_final_audio_is_at_publishing_loudness(project, tmp_path):
+    pick_audio(project)
+    out = final.render(project, tmp_path / "final.mp4")
+    loudness, peak = media.measure(out)
+    assert loudness == pytest.approx(media.PUBLISH_LUFS, abs=0.6)
+    assert peak <= media.PUBLISH_TRUE_PEAK + 0.3  # AAC encoding adds a little
+
+
+def test_render_applies_the_picked_mastering(project, tmp_path, monkeypatch):
+    pick_audio(project)
+    master = tools.get_tool("voice-master")
+    project.add_excerpt("master", Excerpt(1.0, 3.0))
+    project.propose("master", master.name, master.version, master.settings({}), "test")
+    assert sampling.render_round(project, "master").rendered == ["c1"]
+    project.record("master", "pick", label="A")
+
+    applied = []
+    original_apply = type(master).apply
+    monkeypatch.setattr(type(master), "apply", lambda self, *a, **k: applied.append(a[1]) or original_apply(self, *a, **k))
+    out = final.render(project, tmp_path / "final.mp4")
+
+    assert applied == [master.settings({})]
+    assert media.measure(out)[0] == pytest.approx(media.PUBLISH_LUFS, abs=0.6)
+
+
+def test_render_refuses_an_unpicked_mastering_round(project):
+    pick_audio(project)
+    master = tools.get_tool("voice-master")
+    project.propose("master", master.name, master.version, master.settings({}), "test")
+    with pytest.raises(ProjectError, match="master is open"):
+        final.render(project)

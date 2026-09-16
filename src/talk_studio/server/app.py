@@ -15,10 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .. import cache, sampling, tools
-from ..project import Candidate, Project, ProjectError
+from ..project import UPSTREAM, Candidate, Project, ProjectError
 from ..timecode import Excerpt
 
 STATIC = Path(__file__).parent / "static"
+# What key 0 plays: the untouched source, or the upstream pick before this step.
+REFERENCE = {"master": "Before mastering"}
 MAX_LOG = 4000
 
 
@@ -65,6 +67,11 @@ def create_app(project_root: Path) -> FastAPI:
         excerpts = project.decision(name).excerpts
         if not 0 <= index < len(excerpts):
             raise HTTPException(404, "no such excerpt")
+        if name in UPSTREAM:
+            try:
+                project.picked(UPSTREAM[name])
+            except ProjectError as error:
+                raise HTTPException(404, str(error)) from None
         if label == "original":
             return sampling.sample_file(project, name, tools.Original(), {}, excerpts[index])
         round_ = project.open_round(name)
@@ -125,8 +132,15 @@ def create_app(project_root: Path) -> FastAPI:
         closed = sorted({v.round for v in verdicts})
         members = project.round_candidates(name, round_) if round_ else []
 
+        blocked = None
+        if name in UPSTREAM:
+            try:
+                project.picked(UPSTREAM[name])
+            except ProjectError as error:
+                blocked = str(error)
+
         loudness = {}
-        if round_:
+        if round_ and not blocked:
             count = len(decision.excerpts)
             for label in ["original", *[project.label(c) for c in members]]:
                 loudness[label] = [sampling.loudness(sample_path(project, name, label, i)) for i in range(count)]
@@ -134,6 +148,8 @@ def create_app(project_root: Path) -> FastAPI:
         return {
             "name": name,
             "status": decision.status,
+            "reference": REFERENCE.get(name, "Original"),
+            "blocked": blocked,
             "excerpts": excerpt_list(project, name),
             "open_round": round_,
             "candidates": [view(project, c, revealed=False) for c in members],

@@ -13,13 +13,60 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import binaries, cache, media, tools
-from .project import Project, ProjectError
+from .project import UPSTREAM, Project, ProjectError
 from .timecode import Excerpt
+from .tools.mastering import WORKING_LUFS
+
+
+def _upstream_key(project: Project, name: str) -> str:
+    candidate = project.picked(name)
+    tool = tools.get_tool(candidate.tool)
+    return cache.sample_key(
+        fingerprint=project.fingerprint, tool=tool.name, version=tool.version,
+        settings=candidate.settings, excerpt="full",
+    )
+
+
+def _build(path: Path, render) -> Path:
+    """Render to a writer-unique partial file and move it into place."""
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_suffix(f".{os.getpid()}-{uuid.uuid4().hex[:8]}.partial.wav")
+        try:
+            render(partial)
+            os.replace(partial, path)
+        finally:
+            partial.unlink(missing_ok=True)
+    return path
+
+
+def picked_audio(project: Project, name: str) -> Path:
+    """The full-length output of a decision's pick, rendered once and cached."""
+    candidate = project.picked(name)
+    tool = tools.get_tool(candidate.tool)
+    path = cache.render_path(project.root, f"{name}-{_upstream_key(project, name)}.wav")
+    return _build(path, lambda partial: tool.apply(project.source, candidate.settings, partial))
+
+
+def working_audio(project: Project, decision: str) -> Path:
+    """What a downstream decision is judged on: its upstream pick, set to the working level."""
+    upstream = picked_audio(project, UPSTREAM[decision])
+    path = upstream.with_name(f"{upstream.stem}-working.wav")
+    return _build(path, lambda partial: media.set_loudness(upstream, partial, target=WORKING_LUFS))
+
+
+def source_for(project: Project, decision: str) -> Path:
+    return working_audio(project, decision) if decision in UPSTREAM else project.source
 
 
 def sample_file(project: Project, decision: str, tool: tools.AudioTool, settings: dict, excerpt: Excerpt) -> Path:
+    # A downstream decision's samples depend on the upstream pick too, so a
+    # different pick never serves a stale sample from the cache.
+    fingerprint = project.fingerprint
+    if decision in UPSTREAM:
+        fingerprint = f"{fingerprint}+{_upstream_key(project, UPSTREAM[decision])}@{WORKING_LUFS:g}"
     key = cache.sample_key(
-        fingerprint=project.fingerprint, tool=tool.name, version=tool.version,
+        fingerprint=fingerprint, tool=tool.name, version=tool.version,
         settings=settings, excerpt=str(excerpt),
     )
     return cache.project_dir(project.root) / "samples" / decision / f"{key}.wav"
@@ -35,17 +82,12 @@ def loudness(path: Path) -> float | None:
 def ensure_sample(project: Project, decision: str, tool: tools.AudioTool, settings: dict, excerpt: Excerpt) -> Path:
     path = sample_file(project, decision, tool, settings, excerpt)
     if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
+        source = source_for(project, decision)
         # Unique per writer: two processes racing to render the same key (the
         # server's background re-render and a concurrent `talk-studio sample`
         # are the reachable case) must never share a partial path, or each
         # can validate and replace a file the other is still writing.
-        partial = path.with_suffix(f".{os.getpid()}-{uuid.uuid4().hex[:8]}.partial.wav")
-        try:
-            tool.sample(project.source, excerpt, settings, partial)
-            os.replace(partial, path)
-        finally:
-            partial.unlink(missing_ok=True)
+        _build(path, lambda partial: tool.sample(source, excerpt, settings, partial))
     if loudness(path) is None:
         path.with_suffix(".json").write_text(json.dumps({"lufs": media.integrated_loudness(path)}))
     return path
@@ -65,6 +107,8 @@ def render_round(project: Project, decision: str) -> RoundReport:
     if round_ is None:
         raise ProjectError(f"{decision} has no open round; propose candidates first")
     project.check_source()
+    if decision in UPSTREAM:
+        project.picked(UPSTREAM[decision])
 
     for excerpt in excerpts:
         ensure_sample(project, decision, tools.Original(), {}, excerpt)

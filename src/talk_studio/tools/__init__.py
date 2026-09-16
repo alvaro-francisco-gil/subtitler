@@ -125,8 +125,9 @@ class Original(AudioTool):
 def all_tools() -> list[AudioTool]:
     from .deepfilternet import DeepFilterNet
     from .ffmpeg_chain import FfmpegChain
+    from .mastering import SpeechLeveler, VoiceMaster
 
-    return [FfmpegChain(), DeepFilterNet()]
+    return [FfmpegChain(), DeepFilterNet(), VoiceMaster(), SpeechLeveler()]
 
 
 def get_tool(name: str) -> AudioTool:

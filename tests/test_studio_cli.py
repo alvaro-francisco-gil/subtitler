@@ -84,3 +84,8 @@ def test_render_without_a_pick_is_an_error(project_dir, capsys):
 def test_doctor_reports_ffmpeg(capsys):
     code, out, _ = run(["doctor"], capsys)
     assert code == 0 and "ffmpeg" in out
+
+
+def test_propose_refuses_a_tool_of_another_kind(project_dir, capsys):
+    code, _, err = run(["propose", "master", "--tool", "deepfilternet", "--project", str(project_dir)], capsys)
+    assert code == 1 and "deepfilternet is an audio tool" in err and "voice-master" in err

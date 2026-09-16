@@ -16,6 +16,15 @@ from . import binaries
 AUDIO_TOLERANCE = 0.05
 CHUNK = 8 * 1024 * 1024
 LUFS_RE = re.compile(r"I:\s+(-?\d+(?:\.\d+)?) LUFS")
+PEAK_RE = re.compile(r"Peak:\s+(-?\d+(?:\.\d+)?|-inf) dBFS")
+
+# What YouTube and Spotify normalise to: publishing louder only gets turned down,
+# publishing quieter plays quieter than everything around it.
+PUBLISH_LUFS = -14.0
+PUBLISH_TRUE_PEAK = -1.0
+# The limiter aims below the ceiling: resampling back from 192 kHz can add a
+# fraction of a dB of inter-sample peak.
+LIMITER_MARGIN_DB = 0.5
 
 
 class RenderError(Exception):
@@ -101,3 +110,57 @@ def validate(path: Path, *, expected: float, tolerance: float, streams: tuple[st
                 f"{path.name}: video {durations['video']:.3f}s and audio "
                 f"{durations['audio']:.3f}s differ by more than {tolerance:.3f}s"
             )
+
+
+def measure(path: Path) -> tuple[float, float]:
+    """Integrated loudness in LUFS and true peak in dBTP."""
+    result = binaries.run([
+        binaries.ffmpeg(), "-hide_banner", "-nostats", "-i", str(path),
+        "-af", "ebur128=peak=true:framelog=quiet", "-f", "null", "-",
+    ])
+    loudness, peaks = LUFS_RE.findall(result.stderr), PEAK_RE.findall(result.stderr)
+    if not loudness or not peaks:
+        raise RenderError(f"could not measure the loudness of {path}")
+    peak = peaks[-1]
+    return float(loudness[-1]), float("-inf") if peak == "-inf" else float(peak)
+
+
+def _gain(src: Path, out: Path, filters: str) -> Path:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    binaries.run([
+        binaries.ffmpeg(), "-y", "-v", "error", "-i", str(src),
+        "-af", filters, "-ar", "48000", "-c:a", "pcm_s16le", str(out),
+    ])
+    return out
+
+
+def set_loudness(src: Path, out: Path, *, target: float) -> Path:
+    """A static gain towards `target` LUFS, held back where it would push a peak past -0.5 dBTP."""
+    loudness, peak = measure(src)
+    gain = min(target - loudness, -0.5 - peak)
+    return _gain(src, out, f"volume={gain:.2f}dB")
+
+
+def publish_loudness(src: Path, out: Path, *, target: float = PUBLISH_LUFS, true_peak: float = PUBLISH_TRUE_PEAK, passes: int = 4) -> Path:
+    """Gain up to the publishing target with a true-peak limiter, correcting for what the limiter takes.
+
+    Limiting lowers the integrated loudness, so the gain is re-measured and nudged
+    until the result lands within 0.3 LU of the target.
+    """
+    limit = 10 ** ((true_peak - LIMITER_MARGIN_DB) / 20)
+    gain = target - measure(src)[0]
+    for _ in range(passes):
+        _gain(src, out, (
+            f"volume={gain:.2f}dB,aresample=192000,"
+            f"alimiter=limit={limit:.4f}:attack=5:release=50:level=false,aresample=48000"
+        ))
+        loudness, peak = measure(out)
+        if abs(loudness - target) <= 0.3:
+            break
+        gain += target - loudness
+    if abs(loudness - target) > 0.5 or peak > true_peak:
+        raise RenderError(
+            f"{out.name}: reached {loudness:.1f} LUFS / {peak:.1f} dBTP, "
+            f"wanted {target:g} LUFS under {true_peak:g} dBTP"
+        )
+    return out

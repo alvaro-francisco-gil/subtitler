@@ -123,3 +123,39 @@ def test_concurrent_ensure_sample_does_not_corrupt_the_cached_file(project):
     # No writer-specific partial files were left behind.
     leftovers = list(final_path.parent.glob("*.partial.wav"))
     assert leftovers == []
+
+
+def test_mastering_samples_need_an_audio_pick(project):
+    project.add_excerpt("master", Excerpt(1.0, 3.0))
+    master = tools.get_tool("voice-master")
+    project.propose("master", master.name, master.version, master.settings({}), "test")
+    with pytest.raises(ProjectError, match="audio is open"):
+        sampling.render_round(project, "master")
+
+
+def test_mastering_samples_follow_the_audio_pick(project):
+    chain = tools.get_tool("ffmpeg-chain")
+    for strength in (10, 30):
+        project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": strength}), "test")
+    sampling.render_round(project, "audio")
+    project.record("audio", "pick", label="A")
+    master = tools.get_tool("voice-master")
+    excerpt = Excerpt(1.0, 3.0)
+    first = sampling.sample_file(project, "master", master, master.settings({}), excerpt)
+
+    project.reopen("audio")
+    project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": 30}), "test")
+    sampling.render_round(project, "audio")
+    project.record("audio", "pick", label="A")
+
+    assert sampling.sample_file(project, "master", master, master.settings({}), excerpt) != first
+
+
+def test_working_audio_sits_at_the_working_level(project):
+    chain = tools.get_tool("ffmpeg-chain")
+    project.propose("audio", chain.name, chain.version, chain.settings({}), "test")
+    sampling.render_round(project, "audio")
+    project.record("audio", "pick", label="A")
+    from talk_studio import media
+    from talk_studio.tools.mastering import WORKING_LUFS
+    assert media.integrated_loudness(sampling.working_audio(project, "master")) == pytest.approx(WORKING_LUFS, abs=0.5)

@@ -66,6 +66,10 @@ def command_excerpts(args) -> int:
 def command_propose(args) -> int:
     project = Project.load(args.project)
     tool = tools.get_tool(args.tool)
+    project.decision(args.decision)
+    if tool.kind != args.decision:
+        fitting = ", ".join(t.name for t in tools.all_tools() if t.kind == args.decision) or "none yet"
+        raise ProjectError(f"{tool.name} is an {tool.kind} tool; tools for {args.decision}: {fitting}")
     raw = {}
     for pair in args.set:
         key, sep, value = pair.partition("=")

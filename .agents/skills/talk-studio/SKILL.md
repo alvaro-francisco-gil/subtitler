@@ -23,14 +23,21 @@ You explore; the human judges. Never pick for them, and never skip the review pa
    the human's notes. Translate the note into settings — "metallic" means less
    denoising; "boomy" means a higher high-pass; "too quiet in the pauses" means less
    compression — and propose the next round around it.
-7. On a pick, stop. `talk-studio render --project <dir>` produces the final file.
+7. On an `audio` pick, run the same loop for `master`: its samples are cut from the
+   picked audio, so it cannot start before that pick. Vary the kind here too —
+   `voice-master` (EQ, de-esser, compressor) against `speech-leveler` (phrase-by-phrase
+   levelling). Notes translate as: "thin" → more `warmth_db` or less `presence_db`;
+   "harsh" or "hissy" → more `deess`, less `air_db`; "flat" or "lifeless" → a gentler
+   `ratio`; "quiet bits get lost" → `speech-leveler` with a higher `max_boost`.
+8. On the last pick, stop. `talk-studio render --project <dir>` produces the final file
+   at -14 LUFS / -1 dBTP. Never propose loudness as a candidate; the render owns it.
 
 ## Rules
 
 - Keep the original in mind: every round is compared against it, so a candidate that
   is only a little different from the original wastes a slot.
 - Nine candidates is the hard cap; four is kind.
-- A `stale` decision means the source changed. Re-sample and ask the human to pick
+- A `stale` `master` means the audio pick changed under it. Otherwise a `stale` decision means the source changed. Re-sample and ask the human to pick
   again; `talk-studio reopen <decision>` is the command that reopens a decision that
   was already picked.
 - Project folders live beside the material (for talks, the `recording/` folder of the

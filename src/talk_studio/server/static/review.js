@@ -73,7 +73,9 @@ function render() {
   const v = state.view;
   $("decision").hidden = false;
   $("decision-title").textContent = v.name;
-  $("decision-status").textContent = v.open_round ? `Round ${v.open_round} · ${v.status}` : `No open round · ${v.status}`;
+  $("decision-status").textContent = v.blocked
+    ? `Waiting · ${v.blocked}`
+    : v.open_round ? `Round ${v.open_round} · ${v.status}` : `No open round · ${v.status}`;
 
   const excerpts = $("excerpts");
   excerpts.replaceChildren();
@@ -86,7 +88,7 @@ function render() {
   });
 
   const candidates = $("candidates");
-  const originalButton = button("0 · Original", "original");
+  const originalButton = button(`0 · ${v.reference}`, "original");
   if (!measured("original")) {
     originalButton.disabled = true;
     originalButton.textContent += " · rendering…";

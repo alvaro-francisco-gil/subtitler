@@ -4,6 +4,7 @@ from talk_studio import media, tools
 from talk_studio.timecode import Excerpt
 from talk_studio.tools import Param, ToolError
 from talk_studio.tools.ffmpeg_chain import FfmpegChain, filter_chain
+from talk_studio.tools.mastering import SpeechLeveler, VoiceMaster
 
 
 def test_param_coerces_strings():
@@ -63,7 +64,35 @@ def test_apply_renders_the_full_length(tiny_video, tmp_path):
 
 
 def test_registry():
-    assert [t.name for t in tools.all_tools()] == ["ffmpeg-chain", "deepfilternet"]
+    assert [(t.name, t.kind) for t in tools.all_tools()] == [
+        ("ffmpeg-chain", "audio"), ("deepfilternet", "audio"),
+        ("voice-master", "master"), ("speech-leveler", "master"),
+    ]
     assert tools.get_tool("ffmpeg-chain").version == "1"
     with pytest.raises(ToolError, match="no tool named"):
         tools.get_tool("magic")
+
+
+def test_voice_master_filters_follow_settings():
+    master = VoiceMaster()
+    default = master.filters(master.settings({}))
+    assert default[0] == "highpass=f=70"
+    assert any(f.startswith("deesser=") for f in default)
+    assert any(f.startswith("acompressor=threshold=0.03162") for f in default)
+
+    flat = master.filters(master.settings({
+        "highpass_hz": 0, "mud_db": 0, "presence_db": 0, "air_db": 0, "deess": 0, "ratio": 1,
+    }))
+    assert flat == []
+
+
+def test_speech_leveler_ends_with_the_leveler():
+    leveler = SpeechLeveler()
+    filters = leveler.filters(leveler.settings({"max_boost": 6}))
+    assert filters[-1].startswith("speechnorm=e=6:c=2")
+
+
+@pytest.mark.parametrize("tool", [VoiceMaster(), SpeechLeveler()], ids=lambda t: t.name)
+def test_mastering_tools_render_the_excerpt_length(tool, tiny_video, tmp_path):
+    out = tool.sample(tiny_video, Excerpt(2.5, 4.5), tool.settings({}), tmp_path / "m.wav")
+    assert media.stream_durations(out)["audio"] == pytest.approx(2.0, abs=media.AUDIO_TOLERANCE)

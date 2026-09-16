@@ -3,7 +3,8 @@
 Agents propose edits to a recorded talk; a human picks what feels right.
 
 An agent tries several very different treatments — today, audio clean-up with
-ffmpeg filters or DeepFilterNet — and renders each on the same short excerpts.
+ffmpeg filters or DeepFilterNet, then mastering with a vocal chain or a phrase
+leveler — and renders each on the same short excerpts.
 You open the review page, switch between them blind with matched levels, and
 pick one or reject the round with a note. The agent reads the note and tries
 again. Only picks reach the final render.
@@ -17,8 +18,19 @@ uv run talk-studio propose audio --tool ffmpeg-chain --project ./talk-project
 uv run talk-studio propose audio --tool deepfilternet --project ./talk-project
 uv run talk-studio sample audio --project ./talk-project
 uv run talk-studio review --project ./talk-project     # open http://localhost:8765/
+# after the audio pick, the same loop for mastering, judged on the cleaned audio
+uv run talk-studio excerpts suggest master --project ./talk-project
+uv run talk-studio propose master --tool voice-master --project ./talk-project
+uv run talk-studio propose master --tool speech-leveler --project ./talk-project
+uv run talk-studio sample master --project ./talk-project
 uv run talk-studio render --project ./talk-project
 ```
+
+The render always publishes at -14 LUFS integrated with true peaks under
+-1 dBTP, the level YouTube and Spotify normalise to. Loudness is a standard, not
+a matter of taste, so it is never a candidate: mastering candidates are judged at
+matched levels on tone and dynamics alone, and set to a -26 LUFS working level
+first so a compressor threshold means the same thing on every recording.
 
 Agents: see [.agents/skills/talk-studio/SKILL.md](.agents/skills/talk-studio/SKILL.md).
 

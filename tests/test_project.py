@@ -163,3 +163,22 @@ def test_a_missing_source_is_an_error(project):
     project.source.unlink()
     with pytest.raises(ProjectError, match="not found"):
         project.check_source()
+
+
+def test_a_project_from_before_mastering_gains_the_master_decision(project):
+    text = (project.root / "project.toml").read_text()
+    head, _, _ = text.partition("[decisions.master]")
+    (project.root / "project.toml").write_text(head)
+    assert Project.load(project.root).decision("master").status == "open"
+
+
+def test_reopening_audio_makes_a_master_pick_stale(project):
+    project.decisions["master"].status, project.decisions["master"].pick = "picked", "c1"
+    project.save()
+    project.reopen("audio")
+    assert Project.load(project.root).decision("master").status == "stale"
+
+
+def test_picked_names_the_problem(project):
+    with pytest.raises(ProjectError, match="audio is open"):
+        project.picked("audio")

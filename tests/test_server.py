@@ -143,3 +143,16 @@ def test_a_failed_candidate_stays_blind_in_an_open_round(tiny_video, tmp_path, m
     assert failed["error"] and "id" not in failed and "tool" not in failed and "settings" not in failed
     text = response.text
     assert "ffmpeg" not in text and "denoise_db" not in text and "ffmpeg-chain" not in text and "c2" not in text
+
+
+def test_mastering_waits_for_the_audio_pick(client_and_project):
+    client, project = client_and_project
+    project.add_excerpt("master", Excerpt(1.0, 3.0))
+    master = tools.get_tool("voice-master")
+    project.propose("master", master.name, master.version, master.settings({}), "agent")
+
+    body = client.get("/api/decisions/master").json()
+    assert body["reference"] == "Before mastering"
+    assert "audio is open" in body["blocked"] and body["loudness"] == {}
+    assert client.get("/api/decisions/master/samples/A/0.wav").status_code == 404
+    assert client.get("/api/decisions/audio").json()["reference"] == "Original"

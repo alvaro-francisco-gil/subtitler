@@ -1,7 +1,8 @@
 """The final render, from picks only.
 
-Step 1 knows one decision: the picked audio treatment is applied to the whole
-source and muxed back under the untouched video stream.
+The picked audio treatment runs on the whole source; the picked mastering, if
+the project has one, shapes it at the working level; the result is brought to
+publishing loudness and muxed back under the untouched video stream.
 """
 
 from __future__ import annotations
@@ -9,24 +10,30 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from . import binaries, cache, media, probe, tools
+from . import binaries, cache, media, probe, sampling
+from . import tools
 from .project import Project, ProjectError
 
 
 def render(project: Project, out: Path | None = None) -> Path:
     project.check_source()
-    decision = project.decision("audio")
-    if decision.status != "picked":
-        raise ProjectError(f"audio is {decision.status}; pick a candidate in the review page first")
-    candidate = next((c for c in project.candidates("audio") if c.id == decision.pick), None)
-    if candidate is None:
-        raise ProjectError(f"audio is picked as {decision.pick}, but that candidate is missing from {project.root / 'candidates' / 'audio'}")
-    tool = tools.get_tool(candidate.tool)
+    project.picked("audio")
+    master = project.decision("master")
+    if master.status != "picked" and project.candidates("master"):
+        raise ProjectError(f"master is {master.status}; pick a mastering candidate in the review page first")
 
     out = out or cache.render_path(project.root, f"{project.source.stem}-final.mp4")
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="talk-studio-render-") as staging:
-        audio = tool.apply(project.source, candidate.settings, Path(staging) / "audio.wav")
+        staging = Path(staging)
+        if master.status == "picked":
+            candidate = project.picked("master")
+            shaped = tools.get_tool(candidate.tool).apply(
+                sampling.working_audio(project, "master"), candidate.settings, staging / "mastered.wav",
+            )
+        else:
+            shaped = sampling.picked_audio(project, "audio")
+        audio = media.publish_loudness(shaped, staging / "published.wav")
         binaries.run([
             binaries.ffmpeg(), "-y", "-v", "error",
             "-i", str(project.source), "-i", str(audio),

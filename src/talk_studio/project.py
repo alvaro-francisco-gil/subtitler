@@ -22,7 +22,10 @@ from . import media
 from .timecode import Excerpt, parse_excerpt
 
 PROJECT_FILE = "project.toml"
-DECISIONS = ("audio",)
+DECISIONS = ("audio", "master")
+# A decision judged on the output of another: its samples are cut from the
+# upstream pick, so changing that pick invalidates it.
+UPSTREAM = {"master": "audio"}
 LABELS = "ABCDEFGHI"
 
 
@@ -115,6 +118,8 @@ class Project:
             )
             for name, raw in data.get("decisions", {}).items()
         }
+        for name in DECISIONS:
+            decisions.setdefault(name, Decision(name))
         source = data["source"]
         return cls(
             root=root,
@@ -296,7 +301,22 @@ class Project:
 
         return entry
 
+    def picked(self, name: str) -> Candidate:
+        """The picked candidate of a decision, or why there is none."""
+        decision = self.decision(name)
+        if decision.status != "picked":
+            raise ProjectError(f"{name} is {decision.status}; pick a candidate in the review page first")
+        candidate = next((c for c in self.candidates(name) if c.id == decision.pick), None)
+        if candidate is None:
+            raise ProjectError(
+                f"{name} is picked as {decision.pick}, but that candidate is missing from {self._candidates_dir(name)}"
+            )
+        return candidate
+
     def reopen(self, name: str) -> None:
         decision = self.decision(name)
         decision.status, decision.pick = "open", None
+        for downstream, upstream in UPSTREAM.items():
+            if upstream == name and self.decisions[downstream].status == "picked":
+                self.decisions[downstream].status = "stale"
         self.save()

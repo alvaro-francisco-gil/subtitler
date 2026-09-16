@@ -75,3 +75,36 @@ def test_validate_rejects_audio_video_drift(tmp_path):
 
     with pytest.raises(media.RenderError, match="differ by more than"):
         media.validate(out, expected=6.0, tolerance=0.1, streams=("video", "audio"))
+
+
+def test_measure_reports_loudness_and_true_peak(tmp_path):
+    wav = make_media(tmp_path / "a.wav", seconds=4.0, video=False)
+    loudness, peak = media.measure(wav)
+    assert loudness == pytest.approx(media.integrated_loudness(wav), abs=0.1)
+    assert loudness < peak < 0.0
+
+
+def test_set_loudness_applies_a_static_gain(tmp_path):
+    wav = make_media(tmp_path / "a.wav", seconds=4.0, video=False)
+    out = media.set_loudness(wav, tmp_path / "work.wav", target=-30.0)
+    assert media.integrated_loudness(out) == pytest.approx(-30.0, abs=0.3)
+    assert media.stream_durations(out)["audio"] == pytest.approx(4.0, abs=media.AUDIO_TOLERANCE)
+
+
+def test_set_loudness_never_clips(tmp_path):
+    wav = make_media(tmp_path / "a.wav", seconds=4.0, video=False)
+    out = media.set_loudness(wav, tmp_path / "work.wav", target=-3.0)
+    assert media.measure(out)[1] <= -0.5
+
+
+def test_publish_loudness_hits_the_target_under_the_true_peak_ceiling(tmp_path):
+    wav = make_media(tmp_path / "a.wav", seconds=6.0, video=False)
+    quiet = tmp_path / "quiet.wav"
+    binaries.run([binaries.ffmpeg(), "-y", "-v", "error", "-i", str(wav), "-af", "volume=-20dB", str(quiet)])
+
+    out = media.publish_loudness(quiet, tmp_path / "loud.wav")
+
+    loudness, peak = media.measure(out)
+    assert loudness == pytest.approx(media.PUBLISH_LUFS, abs=0.5)
+    assert peak <= media.PUBLISH_TRUE_PEAK
+    assert media.stream_durations(out)["audio"] == pytest.approx(6.0, abs=media.AUDIO_TOLERANCE)
