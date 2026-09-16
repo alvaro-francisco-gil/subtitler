@@ -30,6 +30,9 @@ unaudited Cloud project are locked private forever.
    caption track `serving`. Send the human the link and that summary.
 7. **Public only on an explicit go.** `talk-studio youtube privacy <id> public` after the
    human says so in this conversation. "OK" to something else is not a go.
+   To publish later instead, `talk-studio youtube schedule <id> 2026-09-18T18:00+02:00`
+   (private until then). A batch of Shorts goes out one a day, not all at once. An id
+   starting with `-` needs `--` before it.
 8. **Record it** beside the talk: the video id and URL, and the date it went public.
 
 ## Common mistakes

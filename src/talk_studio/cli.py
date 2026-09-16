@@ -257,6 +257,9 @@ def command_youtube(args) -> int:
     elif action == "privacy":
         youtube.set_privacy(youtube.service(), args.video, args.privacy)
         emit(args, f"https://youtu.be/{args.video} is now {args.privacy}", {"video": args.video, "privacy": args.privacy})
+    elif action == "schedule":
+        at = youtube.schedule(youtube.service(), args.video, args.when)
+        emit(args, f"https://youtu.be/{args.video} goes public at {at:%Y-%m-%d %H:%M} UTC", {"video": args.video, "publish_at": at.isoformat()})
     return 0
 
 
@@ -346,6 +349,9 @@ def build_parser() -> argparse.ArgumentParser:
     a = actions.add_parser("privacy", help="make a video public, unlisted or private")
     a.add_argument("video")
     a.add_argument("privacy", choices=["public", "unlisted", "private"])
+    a = actions.add_parser("schedule", help="keep a video private until a time, then YouTube publishes it")
+    a.add_argument("video")
+    a.add_argument("when", help="ISO 8601 with an offset, e.g. 2026-09-18T18:00+02:00")
     command("doctor", command_doctor, "check binaries and tool requirements", project=False)
     sub.add_parser("captions", help="align a transcript and burn subtitles (the former subtitler)")
     return parser

@@ -50,6 +50,7 @@ uv run talk-studio youtube check youtube.toml        # offline: limits, chapters
 uv run talk-studio youtube latest                    # find the upload's id
 uv run talk-studio youtube apply youtube.toml --video <id>   # details, thumbnail, captions
 uv run talk-studio youtube privacy <id> public
+uv run talk-studio youtube schedule <id> 2026-09-18T18:00+02:00   # public at that time
 ```
 
 `apply` never changes privacy and can be re-run; it replaces its own caption track.

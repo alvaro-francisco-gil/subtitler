@@ -141,3 +141,16 @@ def test_cli_check_and_missing_sign_in(tmp_path, monkeypatch, capsys):
     assert "3 chapters, 1 caption tracks" in capsys.readouterr().out
     assert cli.main(["youtube", "latest"]) == 1
     assert "not signed in" in capsys.readouterr().err
+
+
+def test_schedule_sends_publish_at_in_utc_and_refuses_past_or_naive_times():
+    import datetime
+    api = FakeApi({})
+    now = datetime.datetime(2026, 9, 17, tzinfo=datetime.timezone.utc)
+    at = youtube.schedule(api, "vid", "2026-09-18T18:00+02:00", now=now)
+    status = api.log[0][1]["body"]["status"]
+    assert status == {"privacyStatus": "private", "publishAt": "2026-09-18T16:00:00Z", "selfDeclaredMadeForKids": False}
+    assert at.hour == 16
+    for bad in ("2026-09-18T18:00", "2026-09-16T18:00+02:00", "tomorrow"):
+        with pytest.raises(youtube.YouTubeError):
+            youtube.schedule(api, "vid", bad, now=now)

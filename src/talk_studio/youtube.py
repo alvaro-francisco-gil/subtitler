@@ -26,6 +26,7 @@ A metadata file (`youtube.toml`), with paths relative to it:
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import tomllib
@@ -253,6 +254,24 @@ def apply(api, video_id: str, metadata: Metadata) -> list[str]:
             }}, media_body=media))
             done.append(f"captions: added {caption.language} {caption.name!r}")
     return done
+
+
+def schedule(api, video_id: str, when: str, now: datetime.datetime | None = None) -> datetime.datetime:
+    """Keep the video private until `when` (ISO 8601 with an offset), when YouTube makes it public."""
+    try:
+        at = datetime.datetime.fromisoformat(when)
+    except ValueError:
+        raise YouTubeError(f"expected an ISO 8601 time like 2026-09-18T18:00+02:00, not {when!r}") from None
+    if at.tzinfo is None:
+        raise YouTubeError(f"{when!r} has no UTC offset; add one, like +02:00 for Madrid in summer")
+    at = at.astimezone(datetime.timezone.utc)
+    if at <= (now or datetime.datetime.now(datetime.timezone.utc)):
+        raise YouTubeError(f"{when} is in the past")
+    _call(api.videos().update(part="status", body={
+        "id": video_id,
+        "status": {"privacyStatus": "private", "publishAt": at.strftime("%Y-%m-%dT%H:%M:%SZ"), "selfDeclaredMadeForKids": False},
+    }))
+    return at
 
 
 def set_privacy(api, video_id: str, privacy: str) -> None:
