@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import tomllib
 from dataclasses import asdict, dataclass, field
@@ -26,6 +27,13 @@ DECISIONS = ("audio", "master", "grade")
 # A decision judged on the output of another: its samples are cut from the
 # upstream pick, so changing that pick invalidates it.
 UPSTREAM = {"master": "audio"}
+# Vertical clips are decisions too, one per passage, named clip-<slug>.
+CLIP_PREFIX = "clip-"
+SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def is_clip(name: str) -> bool:
+    return name.startswith(CLIP_PREFIX)
 LABELS = "ABCDEFGHI"
 
 
@@ -83,6 +91,7 @@ class Project:
     fingerprint: str
     duration: float
     decisions: dict[str, Decision]
+    words: Path | None = None  # word timings (JSON) for clip captions
 
     @classmethod
     def init(cls, video: Path, root: Path) -> Project:
@@ -117,6 +126,7 @@ class Project:
                 pick=raw.get("pick") or None,
             )
             for name, raw in data.get("decisions", {}).items()
+            if name in DECISIONS or is_clip(name)
         }
         for name in DECISIONS:
             decisions.setdefault(name, Decision(name))
@@ -127,6 +137,7 @@ class Project:
             fingerprint=source["fingerprint"],
             duration=float(source["duration"]),
             decisions=decisions,
+            words=(root / source["words"]).resolve() if source.get("words") else None,
         )
 
     def save(self) -> None:
@@ -137,10 +148,21 @@ class Project:
                 entry["pick"] = decision.pick
             decisions[decision.name] = entry
         data = {
-            "source": {"path": str(self.source), "fingerprint": self.fingerprint, "duration": self.duration},
+            "source": {"path": str(self.source), "fingerprint": self.fingerprint, "duration": self.duration}
+            | ({"words": os.path.relpath(self.words, self.root)} if self.words else {}),
             "decisions": decisions,
         }
         atomic_write(self.root / PROJECT_FILE, tomli_w.dumps(data))
+
+    def add_clip(self, slug: str, excerpt: Excerpt) -> Decision:
+        if not SLUG_RE.match(slug):
+            raise ProjectError(f"clip name {slug!r} must be lowercase words joined by hyphens")
+        name = CLIP_PREFIX + slug
+        if name in self.decisions:
+            raise ProjectError(f"{name} already exists")
+        self.decisions[name] = Decision(name, excerpts=[self._checked(excerpt)])
+        self.save()
+        return self.decisions[name]
 
     def decision(self, name: str) -> Decision:
         try:

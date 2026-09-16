@@ -68,6 +68,7 @@ def test_registry():
         ("ffmpeg-chain", "audio"), ("deepfilternet", "audio"),
         ("voice-master", "master"), ("speech-leveler", "master"),
         ("auto-balance", "grade"), ("ffmpeg-eq", "grade"),
+        ("follow-speaker", "clip"), ("slide-and-speaker", "clip"), ("blur-letterbox", "clip"),
     ]
     assert tools.get_tool("ffmpeg-chain").version == "1"
     with pytest.raises(ToolError, match="no tool named"):

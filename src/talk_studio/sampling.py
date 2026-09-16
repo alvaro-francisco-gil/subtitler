@@ -6,6 +6,8 @@ shows it.
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import json
 import os
 import uuid
@@ -13,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import binaries, cache, media, tools
-from .project import UPSTREAM, Project, ProjectError
+from .project import UPSTREAM, Project, ProjectError, is_clip
 from .timecode import Excerpt
 from .tools.mastering import WORKING_LUFS
 
@@ -55,7 +57,33 @@ def working_audio(project: Project, decision: str) -> Path:
     return _build(path, lambda partial: media.set_loudness(upstream, partial, target=WORKING_LUFS))
 
 
+def final_video(project: Project) -> Path:
+    """The finished talk; clips are cut from it so they carry every other pick."""
+    return cache.render_path(project.root, f"{project.source.stem}-final.mp4")
+
+
+def clip_inputs(project: Project) -> tuple[Path, Path]:
+    video = final_video(project)
+    if not video.exists():
+        raise ProjectError("clips are cut from the final video; run `talk-studio render` first")
+    if project.words is None or not project.words.exists():
+        raise ProjectError("clips need word timings for captions; set them with `talk-studio clips add ... --words <words.json>`")
+    return video, project.words
+
+
+@functools.lru_cache(maxsize=16)
+def _identity(path: str, size: int, mtime: float) -> str:
+    return media.fingerprint(Path(path))
+
+
+def identity(path: Path) -> str:
+    stat = path.stat()
+    return _identity(str(path), stat.st_size, stat.st_mtime)
+
+
 def source_for(project: Project, decision: str) -> Path:
+    if is_clip(decision):
+        return clip_inputs(project)[0]
     return working_audio(project, decision) if decision in UPSTREAM else project.source
 
 
@@ -63,7 +91,10 @@ def sample_file(project: Project, decision: str, tool: tools.Tool, settings: dic
     # A downstream decision's samples depend on the upstream pick too, so a
     # different pick never serves a stale sample from the cache.
     fingerprint = project.fingerprint
-    if decision in UPSTREAM:
+    if is_clip(decision):
+        video, words = clip_inputs(project)
+        fingerprint = f"{identity(video)}+words:{hashlib.sha256(words.read_bytes()).hexdigest()[:16]}"
+    elif decision in UPSTREAM:
         fingerprint = f"{fingerprint}+{_upstream_key(project, UPSTREAM[decision])}@{WORKING_LUFS:g}"
     key = cache.sample_key(
         fingerprint=fingerprint, tool=tool.name, version=tool.version,
@@ -92,7 +123,8 @@ def ensure_sample(project: Project, decision: str, tool: tools.Tool, settings: d
         # server's background re-render and a concurrent `talk-studio sample`
         # are the reachable case) must never share a partial path, or each
         # can validate and replace a file the other is still writing.
-        _build(path, lambda partial: tool.sample(source, excerpt, settings, partial))
+        extra = {"words": project.words} if is_clip(decision) else {}
+        _build(path, lambda partial: tool.sample(source, excerpt, settings, partial, **extra))
     if path.suffix == ".wav" and loudness(path) is None:
         path.with_suffix(".json").write_text(json.dumps({"lufs": media.integrated_loudness(path)}))
     return path
@@ -114,6 +146,8 @@ def render_round(project: Project, decision: str) -> RoundReport:
     project.check_source()
     if decision in UPSTREAM:
         project.picked(UPSTREAM[decision])
+    if is_clip(decision):
+        clip_inputs(project)
 
     for excerpt in excerpts:
         ensure_sample(project, decision, tools.reference_for(decision), {}, excerpt)

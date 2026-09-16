@@ -16,4 +16,10 @@ kbd { border: 1px solid #8886; border-radius: 4px; padding: 0 0.3rem; }
 #frame img { width: 100%; display: block; }
 #frame-over { position: absolute; inset: 0; }
 #frame-divider { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px #0009; pointer-events: none; }
+#video-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-start; }
+#video-grid figure { margin: 0; cursor: pointer; border: 3px solid transparent; border-radius: 8px; padding: 2px; }
+#video-grid figure.on { border-color: var(--accent); }
+#video-grid video { display: block; height: 420px; max-width: 100%; border-radius: 4px; background: #000; }
+#video-grid figcaption { text-align: center; font-weight: 600; padding-top: 0.25rem; }
+body:has(#videos:not([hidden])) { max-width: 1400px; }
 #history-list h4 { margin: 0.75rem 0 0.25rem; }

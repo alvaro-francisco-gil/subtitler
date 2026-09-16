@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .. import cache, sampling, tools
-from ..project import UPSTREAM, Candidate, Project, ProjectError
+from ..project import UPSTREAM, Candidate, Project, ProjectError, is_clip
 from ..timecode import Excerpt
 
 STATIC = Path(__file__).parent / "static"
@@ -67,11 +67,13 @@ def create_app(project_root: Path) -> FastAPI:
         excerpts = project.decision(name).excerpts
         if not 0 <= index < len(excerpts):
             raise HTTPException(404, "no such excerpt")
-        if name in UPSTREAM:
-            try:
+        try:
+            if name in UPSTREAM:
                 project.picked(UPSTREAM[name])
-            except ProjectError as error:
-                raise HTTPException(404, str(error)) from None
+            if is_clip(name):
+                sampling.clip_inputs(project)
+        except ProjectError as error:
+            raise HTTPException(404, str(error)) from None
         if label == "original":
             return sampling.sample_file(project, name, tools.reference_for(name), {}, excerpts[index])
         round_ = project.open_round(name)
@@ -133,11 +135,14 @@ def create_app(project_root: Path) -> FastAPI:
         members = project.round_candidates(name, round_) if round_ else []
 
         blocked = None
-        if name in UPSTREAM:
-            try:
+        try:
+            if name in UPSTREAM:
                 project.picked(UPSTREAM[name])
-            except ProjectError as error:
-                blocked = str(error)
+            if is_clip(name):
+                sampling.clip_inputs(project)
+        except ProjectError as error:
+            blocked = str(error)
+        kind = "video" if is_clip(name) else "image" if name == "grade" else "audio"
 
         loudness, ready = {}, {}
         if round_ and not blocked:
@@ -145,14 +150,14 @@ def create_app(project_root: Path) -> FastAPI:
             for label in ["original", *[project.label(c) for c in members]]:
                 paths = [sample_path(project, name, label, i) for i in range(count)]
                 ready[label] = [sampling.ready(path) for path in paths]
-                if name != "grade":
+                if kind == "audio":
                     loudness[label] = [sampling.loudness(path) for path in paths]
 
         return {
             "name": name,
             "status": decision.status,
-            "kind": "image" if name == "grade" else "audio",
-            "reference": REFERENCE.get(name, "Original"),
+            "kind": kind,
+            "reference": "Wide, no captions" if is_clip(name) else REFERENCE.get(name, "Original"),
             "ready": ready,
             "blocked": blocked,
             "excerpts": excerpt_list(project, name),
@@ -180,6 +185,10 @@ def create_app(project_root: Path) -> FastAPI:
     @app.get("/api/decisions/{name}/samples/{label}/{index}.wav")
     def sample(name: str, label: str, index: int):
         return serve(name, label, index, ".wav", "audio/wav")
+
+    @app.get("/api/decisions/{name}/samples/{label}/{index}.mp4")
+    def clip(name: str, label: str, index: int):
+        return serve(name, label, index, ".mp4", "video/mp4")
 
     @app.get("/api/decisions/{name}/samples/{label}/{index}.jpg")
     def frame(name: str, label: str, index: int):

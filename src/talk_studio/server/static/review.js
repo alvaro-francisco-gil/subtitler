@@ -59,6 +59,7 @@ function measured(label) {
 }
 
 const isImage = () => state.view?.kind === "image";
+const isVideo = () => state.view?.kind === "video";
 
 function sampleUrl(label, extension) {
   const v = state.view;
@@ -67,7 +68,53 @@ function sampleUrl(label, extension) {
 }
 
 function available(label) {
-  return isImage() ? measured(label) : Boolean(state.buffers[label]);
+  return isImage() || isVideo() ? measured(label) : Boolean(state.buffers[label]);
+}
+
+function drawVideos() {
+  const grid = $("video-grid");
+  const key = `${state.view.name}/${state.view.open_round}/${state.excerpt}/${playable().join(",")}`;
+  if (grid.dataset.key !== key) {
+    grid.dataset.key = key;
+    grid.replaceChildren();
+    for (const label of playable()) {
+      const figure = document.createElement("figure");
+      figure.dataset.label = label;
+      const video = document.createElement("video");
+      video.src = sampleUrl(label, "mp4");
+      video.preload = "auto";
+      video.playsInline = true;
+      const caption = document.createElement("figcaption");
+      const index = state.view.candidates.findIndex((c) => c.label === label);
+      caption.textContent = label === "original" ? `0 · ${state.view.reference}` : `${index + 1} · ${label}`;
+      figure.append(video, caption);
+      figure.onclick = () => select(label);
+      grid.append(figure);
+    }
+  }
+  for (const figure of grid.children) {
+    const on = figure.dataset.label === state.selected;
+    figure.classList.toggle("on", on);
+    figure.querySelector("video").muted = !on;
+  }
+}
+
+function videosPlaying() {
+  return [...$("video-grid").querySelectorAll("video")].some((v) => !v.paused);
+}
+
+function toggleVideos() {
+  const videos = [...$("video-grid").querySelectorAll("video")];
+  if (!videos.length) return;
+  if (videosPlaying()) {
+    videos.forEach((v) => v.pause());
+    $("video-play").textContent = "Play all";
+    return;
+  }
+  const lead = videos.find((v) => !v.muted) || videos[0];
+  const at = lead.currentTime >= lead.duration - 0.1 ? 0 : lead.currentTime;
+  videos.forEach((v) => { v.currentTime = at; v.play().catch(() => {}); });
+  $("video-play").textContent = "Pause all";
 }
 
 function playable() {
@@ -131,11 +178,14 @@ function render() {
 
   $("verdict").hidden = !v.open_round;
   const image = isImage();
+  const video = isVideo();
   $("frame").hidden = !image;
   $("frame-hint").hidden = !image;
-  $("player").hidden = image;
-  $("audio-hint").hidden = image;
+  $("videos").hidden = !video;
+  $("player").hidden = image || video;
+  $("audio-hint").hidden = image || video;
   if (image) drawFrame();
+  if (video) drawVideos();
   const ready = Boolean(state.buffers.original);
   $("play").disabled = !ready && !state.playing;
   $("play").title = ready ? "" : v.open_round ? "Loading samples…" : "Nothing to play: this decision has no open round.";
@@ -173,6 +223,10 @@ function drawFrame() {
 async function loadBuffers() {
   const v = state.view;
   state.buffers = {};
+  if (isVideo()) {
+    render();
+    return;
+  }
   if (isImage()) {
     // Warm the browser cache so switching candidates is instant.
     for (const label of playable()) new Image().src = sampleUrl(label, "jpg");
@@ -287,7 +341,7 @@ function schedulePoll() {
     || Object.values(v.ready || {}).some((perExcerpt) => perExcerpt.some((x) => x !== true));
   if (!waiting) return;
   state.poll = setTimeout(async () => {
-    if (state.playing) return schedulePoll();
+    if (state.playing || (isVideo() && videosPlaying())) return schedulePoll();
     try {
       await openDecision(state.decision);
     } catch (error) {
@@ -344,7 +398,10 @@ $("sample-here").onclick = async () => {
 
 document.addEventListener("keydown", (event) => {
   if (event.target.tagName === "TEXTAREA" || !state.view) return;
-  if (event.code === "Space" && !isImage()) {
+  if (event.code === "Space" && isVideo()) {
+    event.preventDefault();
+    toggleVideos();
+  } else if (event.code === "Space" && !isImage()) {
     event.preventDefault();
     state.playing ? stop() : play();
   } else if (event.key === "0") {
@@ -354,6 +411,8 @@ document.addEventListener("keydown", (event) => {
     if (candidate) select(candidate.label);
   }
 });
+
+$("video-play").onclick = toggleVideos;
 
 function dragSplit(event) {
   const box = $("frame").getBoundingClientRect();

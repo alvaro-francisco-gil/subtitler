@@ -26,6 +26,14 @@
     <p id="frame-hint" class="muted" hidden>Drag across the image: left of the line is the reference, right is the
       selected candidate. <kbd>1</kbd>–<kbd>9</kbd> candidates · <kbd>0</kbd> reference everywhere.</p>
 
+    <div id="videos" hidden>
+      <div class="row">
+        <button id="video-play">Play all</button>
+        <span class="muted">All candidates play together; you hear the selected one. Click a video or press its number.</span>
+      </div>
+      <div id="video-grid"></div>
+    </div>
+
     <div id="player" class="player row">
       <button id="play">Play</button>
       <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Position">

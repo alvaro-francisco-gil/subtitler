@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 import time
 from dataclasses import asdict
@@ -70,8 +71,9 @@ def command_propose(args) -> int:
     project = Project.load(args.project)
     tool = tools.get_tool(args.tool)
     project.decision(args.decision)
-    if tool.kind != args.decision:
-        fitting = ", ".join(t.name for t in tools.all_tools() if t.kind == args.decision) or "none yet"
+    kind = tools.kind_of(args.decision)
+    if tool.kind != kind:
+        fitting = ", ".join(t.name for t in tools.all_tools() if t.kind == kind) or "none yet"
         raise ProjectError(f"{tool.name} is an {tool.kind} tool; tools for {args.decision}: {fitting}")
     raw = {}
     for pair in args.set:
@@ -206,6 +208,32 @@ def command_doctor(args) -> int:
     return 0 if all(r["ok"] for r in rows[:2]) else 1
 
 
+def command_clips(args) -> int:
+    project = Project.load(args.project)
+    if args.action == "add":
+        if args.words:
+            project.words = args.words.resolve()
+        decision = project.add_clip(args.slug, parse_excerpt(args.range))
+        emit(args, f"{decision.name}: {decision.excerpts[0]} ({decision.excerpts[0].duration:.0f}s)",
+             {"decision": decision.name, "excerpt": str(decision.excerpts[0])})
+    else:
+        args.out.mkdir(parents=True, exist_ok=True)
+        exported = []
+        for name, decision in project.decisions.items():
+            if not name.startswith("clip-") or decision.status != "picked":
+                continue
+            candidate = project.picked(name)
+            sample = sampling.sample_file(project, name, tools.get_tool(candidate.tool), candidate.settings, decision.excerpts[0])
+            if not sample.exists():
+                raise ProjectError(f"{name}: the picked render is missing; run `talk-studio sample {name}`")
+            target = args.out / f"{name.removeprefix('clip-')}.mp4"
+            shutil.copyfile(sample, target)
+            exported.append(str(target))
+        emit(args, "\n".join(exported) or "no clip is picked yet", exported)
+    project.save()
+    return 0
+
+
 def command_youtube(args) -> int:
     action = args.action
     if action == "auth":
@@ -289,6 +317,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None)
 
     command("status", command_status, "decisions, rounds and source state")
+
+    p = command("clips", command_clips, "vertical clips: add a passage, export the picks")
+    actions = p.add_subparsers(dest="action", required=True)
+    a = actions.add_parser("add", help="make a passage a clip decision")
+    a.add_argument("--project", type=Path, default=argparse.SUPPRESS)
+    a.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    a.add_argument("slug", help="e.g. promise-big; the decision is clip-<slug>")
+    a.add_argument("range", help="e.g. 19:50.2-20:22.2")
+    a.add_argument("--words", type=Path, help="word timings JSON for the captions (kept for later clips)")
+    a = actions.add_parser("export", help="copy every picked clip to a folder")
+    a.add_argument("--project", type=Path, default=argparse.SUPPRESS)
+    a.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    a.add_argument("--out", type=Path, required=True)
 
     p = command("youtube", command_youtube, "publish metadata, thumbnail and captions to YouTube", project=False)
     actions = p.add_subparsers(dest="action", required=True)
