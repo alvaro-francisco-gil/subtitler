@@ -277,14 +277,23 @@ class Project:
             raise ProjectError(f"verdict must be pick or reject, not {verdict!r}")
 
         entry = Verdict(round=round_, verdict=verdict, candidate=candidate_id, note=note.strip(), at=now())
+
+        # Save project state BEFORE appending the verdict: a crash here loses
+        # an unrecorded verdict, which the human simply re-submits. The
+        # reverse order is worse — a crash after the journal append but
+        # before save() would close the round (feedback recorded) while the
+        # decision stays "open" with no pick, so `final.render` refuses and
+        # the next `propose` silently opens a second round on a decision that
+        # was actually settled.
+        if verdict == "pick":
+            decision.status, decision.pick = "picked", candidate_id
+            self.save()
+
         path = self._feedback_path(name)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as handle:
             handle.write(json.dumps(asdict(entry), ensure_ascii=False) + "\n")
 
-        if verdict == "pick":
-            decision.status, decision.pick = "picked", candidate_id
-            self.save()
         return entry
 
     def reopen(self, name: str) -> None:

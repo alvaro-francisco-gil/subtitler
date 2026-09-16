@@ -63,6 +63,26 @@ def test_render_rejects_missing_picked_candidate(project):
         final.render(project)
 
 
+def test_render_refuses_a_stale_pick(project, tmp_path):
+    """A source changed after the pick must block the final render.
+
+    This behaviour exists only by the ordering of two lines in final.render:
+    project.check_source() (which flips a picked decision to "stale" when the
+    source no longer matches) must run before the decision.status check.
+    """
+    chain = tools.get_tool("ffmpeg-chain")
+    project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": 20}), "test")
+    sampling.render_round(project, "audio")
+    project.record("audio", "pick", label="A")
+
+    data = bytearray(project.source.read_bytes())
+    data[len(data) // 2] ^= 0xFF
+    project.source.write_bytes(bytes(data))
+
+    with pytest.raises(ProjectError, match="stale"):
+        final.render(project, tmp_path / "final.mp4")
+
+
 def test_render_accepts_a_source_whose_streams_disagree(drifted_project, tmp_path):
     """A phone recording whose audio and video lengths differ must still render.
 

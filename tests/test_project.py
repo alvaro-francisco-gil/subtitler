@@ -1,5 +1,6 @@
 import shutil
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -98,6 +99,35 @@ def test_reopen_allows_new_rounds(project):
     project.reopen("audio")
     (again,) = propose(project)
     assert again.round == 2
+
+
+def test_a_pick_saves_project_state_before_the_verdict_journal(project, monkeypatch):
+    """A crash must lose an unrecorded verdict, not strand a closed round.
+
+    project.toml (decision.status = "picked") is written before the verdict
+    is appended to feedback/audio.jsonl, so a crash between the two leaves an
+    unrecorded verdict the human can simply re-submit — not a round that is
+    closed (per the journal) while the decision is still "open" with no pick.
+    """
+    (candidate,) = propose(project, 1)
+    candidate.state = "rendered"
+    project.save_candidate(candidate)
+
+    real_open = Path.open
+
+    def boom(self, *args, **kwargs):
+        if self.name == "audio.jsonl":
+            raise OSError("disk full")
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", boom)
+    with pytest.raises(OSError, match="disk full"):
+        project.record("audio", "pick", label="A")
+
+    monkeypatch.undo()
+    loaded = Project.load(project.root)
+    assert (loaded.decision("audio").status, loaded.decision("audio").pick) == ("picked", "c1")
+    assert loaded.feedback("audio") == []
 
 
 def test_record_without_open_round(project):
