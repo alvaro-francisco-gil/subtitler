@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,9 +36,16 @@ def ensure_sample(project: Project, decision: str, tool: tools.AudioTool, settin
     path = sample_file(project, decision, tool, settings, excerpt)
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        partial = path.with_suffix(".partial.wav")
-        tool.sample(project.source, excerpt, settings, partial)
-        os.replace(partial, path)
+        # Unique per writer: two processes racing to render the same key (the
+        # server's background re-render and a concurrent `talk-studio sample`
+        # are the reachable case) must never share a partial path, or each
+        # can validate and replace a file the other is still writing.
+        partial = path.with_suffix(f".{os.getpid()}-{uuid.uuid4().hex[:8]}.partial.wav")
+        try:
+            tool.sample(project.source, excerpt, settings, partial)
+            os.replace(partial, path)
+        finally:
+            partial.unlink(missing_ok=True)
     if loudness(path) is None:
         path.with_suffix(".json").write_text(json.dumps({"lufs": media.integrated_loudness(path)}))
     return path
