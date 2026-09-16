@@ -32,11 +32,15 @@ async function loadProject() {
   nav.replaceChildren();
   for (const d of project.decisions) {
     const b = document.createElement("button");
-    b.textContent = `${d.name} · ${d.status}`;
+    b.textContent = `${d.name} · ${d.status}${d.open_round ? " · to review" : ""}`;
+    b.dataset.decision = d.name;
     b.onclick = () => openDecision(d.name);
     nav.append(b);
   }
-  if (project.decisions.length) await openDecision(state.decision || project.decisions[0].name);
+  // Land on the round waiting for a verdict: a picked decision has nothing to play.
+  const waiting = project.decisions.find((d) => d.open_round);
+  const first = state.decision || (waiting || project.decisions[0])?.name;
+  if (first) await openDecision(first);
 }
 
 async function openDecision(name) {
@@ -73,6 +77,7 @@ function render() {
   const v = state.view;
   $("decision").hidden = false;
   $("decision-title").textContent = v.name;
+  for (const b of $("decisions").children) b.classList.toggle("on", b.dataset.decision === v.name);
   $("decision-status").textContent = v.blocked
     ? `Waiting · ${v.blocked}`
     : v.open_round ? `Round ${v.open_round} · ${v.status}` : `No open round · ${v.status}`;
@@ -113,6 +118,9 @@ function render() {
   });
 
   $("verdict").hidden = !v.open_round;
+  const ready = Boolean(state.buffers.original);
+  $("play").disabled = !ready && !state.playing;
+  $("play").title = ready ? "" : v.open_round ? "Loading samples…" : "Nothing to play: this decision has no open round.";
   $("pick").disabled = state.selected === "original";
 
   const list = $("history-list");
@@ -137,14 +145,20 @@ function render() {
 async function loadBuffers() {
   const v = state.view;
   state.buffers = {};
-  if (!v.excerpts.length) return;
+  if (!v.excerpts.length) { render(); return; }
   state.ctx = state.ctx || new AudioContext();
   await Promise.all(playable().map(async (label) => {
-    const response = await fetch(`/api/decisions/${v.name}/samples/${label}/${state.excerpt}.wav`);
-    if (!response.ok) return;
-    state.buffers[label] = await state.ctx.decodeAudioData(await response.arrayBuffer());
+    try {
+      const response = await fetch(`/api/decisions/${v.name}/samples/${label}/${state.excerpt}.wav`);
+      if (!response.ok) return;
+      state.buffers[label] = await state.ctx.decodeAudioData(await response.arrayBuffer());
+    } catch (error) {
+      // One undecodable sample must not leave every button disabled.
+      console.error(`could not load sample ${label}`, error);
+    }
   }));
   state.offset = 0;
+  render();
   tick();
 }
 
