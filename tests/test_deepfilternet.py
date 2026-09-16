@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from talk_studio import media
+from talk_studio import binaries, media
 from talk_studio.timecode import Excerpt
 from talk_studio.tools.deepfilternet import UVX_ARGS, DeepFilterNet
 
@@ -104,3 +104,19 @@ def test_short_input_is_one_chunk(small_chunks, monkeypatch, tmp_path):
 
     assert len(model.calls[0]) == 1
     assert np.array_equal(read_wav(tmp_path / "out.wav"), read_wav(source))
+
+
+def test_denoise_uses_the_cached_environment_first(monkeypatch, tmp_path):
+    calls = []
+
+    def run(command):
+        calls.append(command)
+        if "--offline" in command:
+            raise binaries.BinaryError("not cached yet")
+
+    monkeypatch.setattr("talk_studio.tools.deepfilternet.binaries.run", run)
+    tool = DeepFilterNet()
+    tool.denoise([tmp_path / "a.wav"], tmp_path, tool.settings({}))
+
+    assert calls[0][:2] == ["uvx", "--offline"]
+    assert calls[1] == tool.command([tmp_path / "a.wav"], tmp_path, tool.settings({}))

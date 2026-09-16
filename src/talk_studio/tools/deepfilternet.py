@@ -58,7 +58,14 @@ class DeepFilterNet(AudioTool):
         return command
 
     def denoise(self, sources: list[Path], out_dir: Path, settings: dict) -> None:
-        binaries.run(self.command(sources, out_dir, settings))
+        command = self.command(sources, out_dir, settings)
+        # The pinned environment is cached after the first run. Offline, uvx skips
+        # re-resolving against two package indexes, which is slower and fails
+        # outright whenever the network drops; online is only for the first run.
+        try:
+            binaries.run([command[0], "--offline", *command[1:]])
+        except binaries.BinaryError:
+            binaries.run(command)
 
     def process(self, src: Path, out: Path, settings: dict) -> None:
         with tempfile.TemporaryDirectory(prefix="talk-studio-dfn-") as staging:
