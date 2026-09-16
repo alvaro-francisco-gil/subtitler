@@ -32,3 +32,20 @@ def test_render_muxes_the_picked_audio(project, tmp_path):
     durations = media.stream_durations(out)
     assert set(durations) == {"video", "audio"}
     assert durations["video"] == pytest.approx(6.0, abs=0.1)
+
+
+def test_render_rejects_missing_picked_candidate(project):
+    chain = tools.get_tool("ffmpeg-chain")
+    project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": 20}), "test")
+    sampling.render_round(project, "audio")
+    project.record("audio", "pick", label="A")
+
+    # Delete the picked candidate's file
+    decision = project.decision("audio")
+    picked_id = decision.pick
+    candidates_dir = project.root / "candidates" / "audio"
+    for candidate_file in candidates_dir.glob("*.toml"):
+        candidate_file.unlink()
+
+    with pytest.raises(ProjectError, match=f"audio is picked as {picked_id}"):
+        final.render(project)

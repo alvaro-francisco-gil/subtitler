@@ -18,7 +18,9 @@ def render(project: Project, out: Path | None = None) -> Path:
     decision = project.decision("audio")
     if decision.status != "picked":
         raise ProjectError(f"audio is {decision.status}; pick a candidate in the review page first")
-    candidate = next(c for c in project.candidates("audio") if c.id == decision.pick)
+    candidate = next((c for c in project.candidates("audio") if c.id == decision.pick), None)
+    if candidate is None:
+        raise ProjectError(f"audio is picked as {decision.pick}, but that candidate is missing from {project.root / 'candidates' / 'audio'}")
     tool = tools.get_tool(candidate.tool)
 
     out = out or cache.render_path(project.root, f"{project.source.stem}-final.mp4")
