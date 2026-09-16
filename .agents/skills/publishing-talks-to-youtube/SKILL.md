@@ -35,6 +35,14 @@ unaudited Cloud project are locked private forever.
    starting with `-` needs `--` before it.
 8. **Record it** beside the talk: the video id and URL, and the date it went public.
 
+## Shorts
+
+The same sequence, one `shorts/<slug>.youtube.toml` per clip: the hook as the title, one
+line about the moment, the full talk's link, `#Shorts`. No caption track, because the
+captions are burnt in. The human can drag every file into one upload; drafts can be edited
+straight away. Offer a schedule, not an instant publish: one a day at 18:00 local, the
+strongest first, lined up with any post announcing the talk.
+
 ## Common mistakes
 
 | Mistake | Instead |
@@ -44,3 +52,5 @@ unaudited Cloud project are locked private forever.
 | Re-running `auth` blindly on any error | Only on auth errors; quota or 403 thumbnail errors are different problems |
 | Custom thumbnail refused (403) | The channel is not verified for custom thumbnails; tell the human, keep going |
 | Making it public because everything checked out | Wait for the human's go |
+| `--video -fhz44aaELE` fails as an unknown flag | `--video=-fhz44aaELE`, or `--` before a positional id |
+| A read-back straight after `schedule` shows no `publishAt` | Read again a few seconds later |

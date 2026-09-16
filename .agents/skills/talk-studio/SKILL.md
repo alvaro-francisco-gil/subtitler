@@ -1,6 +1,6 @@
 ---
 name: talk-studio
-description: Use when editing a recorded talk with talk-studio — proposing audio treatments (and later grades, captions, thumbnails, clips) for a human to judge in the review page
+description: Use when editing a recorded talk with talk-studio — proposing audio treatments, grades or vertical clips (Shorts) for a human to judge in the review page
 ---
 
 # Editing with talk-studio
@@ -37,6 +37,23 @@ You explore; the human judges. Never pick for them, and never skip the review pa
    "too orange" → a lower `strength` or a higher `temperature`.
 9. On the last pick, stop. `talk-studio render --project <dir>` produces the final file
    at -14 LUFS / -1 dBTP. Never propose loudness as a candidate; the render owns it.
+10. **Shorts come after the render**, cut from it. Find passages in the word timings
+   (`words.json`): 30–60 s, one idea, a line that stands alone. `clips add <slug> <range>
+   --words words.json`, then the loop per `clip-<slug>`. Settle in this order, one
+   thing a round: layout first (`follow-speaker` against `slide-and-speaker` and
+   `blur-letterbox`), then the hook's wording (three lines the speaker actually says or
+   implies, same style), then its look (`hook_style` slam / sticker / comic, `hook_emoji`).
+   Pass `hook_size=1.0` with the animated styles. Before telling the human, pull frames
+   (0.5 s, 3 s) from every render and look: text cut off at the top, words run together,
+   an emoji alone on a line over the face. `clips export --out <dir>` collects the picks.
+
+## Reading the human's verdicts
+
+When they ask "did you get the feedback?", read `feedback/<decision>.jsonl`: notes left in
+the page say what to change. A pick with a note ("I like the sentence but bigger") means
+keep that candidate's settings and vary what the note names. When they say "A for all of
+them" in chat, record it with `Project.record(name, "pick", label="A", note=...)` and say
+the note came from chat.
 
 ## Rules
 
@@ -46,5 +63,9 @@ You explore; the human judges. Never pick for them, and never skip the review pa
 - A `stale` `master` means the audio pick changed under it. Otherwise a `stale` decision means the source changed. Re-sample and ask the human to pick
   again; `talk-studio reopen <decision>` is the command that reopens a decision that
   was already picked.
+- Restart `talk-studio review` after changing tool code; it has no `--no-open` flag.
+  Stop it with `pkill -f "talk-studio revie[w]"` in its own command — an unbracketed
+  pattern matches the shell running pkill and kills it.
+- `Excerpt(start, end)` takes an end, not a length.
 - Project folders live beside the material (for talks, the `recording/` folder of the
   deck in the owner's repo), never in this repository.
