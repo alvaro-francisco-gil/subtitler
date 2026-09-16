@@ -58,3 +58,15 @@ def test_suggest_fallback_when_all_windows_in_ambiguous_band():
     # The excerpt should stay within the source's time span.
     assert picks[0].start >= 0.0
     assert picks[0].end <= 60.0  # 120 frames * 0.5 seconds per frame
+
+
+def test_suggest_still_separates_speech_in_a_compressed_recording():
+    # A phone recording with automatic gain: the whole talk inside a 12 dB band.
+    levels = np.full(400, -42.0)      # room tone, only 12 dB below speech
+    levels[20:140] = -33.0            # speech, 10–70 s
+    levels[200:320] = -30.0           # louder speech, 100–160 s
+
+    picks = excerpts.suggest(levels)
+
+    assert len(picks) == 3
+    assert all(p.duration == 12.0 for p in picks)

@@ -42,7 +42,11 @@ def suggest(levels: np.ndarray, *, length: float = 12.0, frame: float = FRAME, m
     if len(levels) < width:
         raise ValueError(f"source is shorter than one {length:g}s excerpt")
     floor = np.percentile(levels, 10)
-    speech = levels > floor + SPEECH_ABOVE_FLOOR_DB
+    # A phone recording with automatic gain can hold the whole talk inside a 12 dB
+    # band, where a fixed 15 dB threshold marks nothing as speech. Fall back to half
+    # the spread so the mask still separates talking from pauses.
+    offset = min(SPEECH_ABOVE_FLOOR_DB, 0.5 * float(np.percentile(levels, 90) - floor))
+    speech = levels > floor + offset
 
     last = len(levels) - width
     edge = int(round(margin / frame))
