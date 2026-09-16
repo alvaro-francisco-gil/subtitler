@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from subtitler import clean
+from talk_studio.captions import clean
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

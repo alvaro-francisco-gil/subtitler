@@ -1,7 +1,7 @@
 import pytest
 
-from subtitler.models import Cue, Word
-from subtitler import group
+from talk_studio.captions.models import Cue, Word
+from talk_studio.captions import group
 
 
 def w(text, start, end):

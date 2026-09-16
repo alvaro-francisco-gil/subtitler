@@ -6,6 +6,8 @@
 edits to a recorded talk using several different tools, and a human picks what
 feels right from rendered samples.
 
+**Plans:** step 1 — [../ready/talk-studio-core-audio.md](../ready/talk-studio-core-audio.md)
+
 ## Context
 
 `subtitler` does one job: time a known transcript against the audio and burn in

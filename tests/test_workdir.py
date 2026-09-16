@@ -1,4 +1,4 @@
-from subtitler import workdir
+from talk_studio.captions import workdir
 
 
 def test_for_video_creates_named_directory(tmp_path):

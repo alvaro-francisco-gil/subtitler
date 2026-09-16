@@ -1,7 +1,7 @@
 import pytest
 
-from subtitler import cli
-from subtitler.models import Word
+from talk_studio.captions import cli
+from talk_studio.captions.models import Word
 
 
 def w(text, start, end):

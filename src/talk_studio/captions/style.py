@@ -13,7 +13,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_STYLE_PATH = Path(__file__).resolve().parents[2] / "style.toml"
+DEFAULT_STYLE_PATH = Path(__file__).resolve().parents[3] / "style.toml"
 
 HEX_RE = re.compile(r"^#?([0-9a-fA-F]{6})$")
 

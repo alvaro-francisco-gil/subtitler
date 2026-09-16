@@ -14,9 +14,10 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from . import align, ass, binaries, clean, drift, extract, group, measure, probe, render, repair, style, workdir
+from .. import binaries, probe
+from . import align, ass, clean, drift, extract, group, measure, render, repair, style, workdir
 from .models import Cue, Word
-from .probe import MediaInfo
+from ..probe import MediaInfo
 
 
 @dataclass
@@ -221,7 +222,7 @@ def command_render(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="subtitler",
+        prog="talk-studio captions",
         description="Burn karaoke-style subtitles into a video from a supplied transcript.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -261,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except (binaries.BinaryError, ValueError, OSError) as error:
-        print(f"subtitler: {error}", file=sys.stderr)
+        print(f"talk-studio captions: {error}", file=sys.stderr)
         return 1
 
 

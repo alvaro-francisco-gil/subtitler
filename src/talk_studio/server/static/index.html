@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>talk-studio review</title>
+  <link rel="stylesheet" href="/static/review.css">
+</head>
+<body>
+  <header>
+    <h1>talk-studio</h1>
+    <span id="source"></span>
+    <nav id="decisions"></nav>
+  </header>
+  <main id="decision" hidden>
+    <h2 id="decision-title"></h2>
+    <p id="decision-status" class="muted"></p>
+
+    <div id="excerpts" class="row"></div>
+
+    <div class="player row">
+      <button id="play">Play</button>
+      <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Position">
+      <span id="clock" class="muted">0:00</span>
+      <button id="sample-here" title="Add an excerpt around this moment and render every candidate on it">Sample here</button>
+    </div>
+
+    <div id="candidates" class="row"></div>
+    <p class="muted">Keys: <kbd>1</kbd>–<kbd>9</kbd> candidates · <kbd>0</kbd> original ·
+      <kbd>Space</kbd> play/pause. Levels are matched, so louder does not mean better.</p>
+
+    <form id="verdict">
+      <textarea id="note" rows="3" placeholder="What do you hear? Optional for a pick, useful for a reject."></textarea>
+      <div class="row">
+        <button type="button" id="pick">Pick selected</button>
+        <button type="button" id="reject">Reject round</button>
+      </div>
+    </form>
+
+    <p id="reveal"></p>
+
+    <details id="history">
+      <summary>Previous rounds</summary>
+      <div id="history-list"></div>
+    </details>
+  </main>
+  <script src="/static/review.js"></script>
+</body>
+</html>

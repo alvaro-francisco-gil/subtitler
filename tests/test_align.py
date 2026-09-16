@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from subtitler import align
-from subtitler.models import Word
+from talk_studio.captions import align
+from talk_studio.captions.models import Word
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -74,7 +74,7 @@ def test_a_genuine_zero_probability_is_not_treated_as_full_confidence():
 @pytest.mark.gpu
 def test_alignment_on_the_real_clip(tmp_path):
     """Aligns a known 15 s excerpt. Downloads a model on first run."""
-    from subtitler import extract
+    from talk_studio.captions import extract
 
     audio = tmp_path / "audio.wav"
     extract.extract_audio(FIXTURES / "clip.mov", audio)
@@ -85,7 +85,7 @@ def test_alignment_on_the_real_clip(tmp_path):
     assert len(words) > 10
     assert words[0].start >= 0.0
     assert all(w.end >= w.start for w in words)
-    from subtitler.probe import probe as probe_media
+    from talk_studio.probe import probe as probe_media
     clip_duration = probe_media(FIXTURES / "clip.mov").duration
     assert all(w.end <= clip_duration + 0.5 for w in words), "no word may fall outside the clip"
     # Timings must be monotonic, or grouping and rendering both break.

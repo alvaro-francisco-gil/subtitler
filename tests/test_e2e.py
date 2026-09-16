@@ -9,7 +9,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 @pytest.mark.slow
 def test_sample_render_end_to_end(tmp_path):
     """The whole pipeline on a 15 s clip: align, group, render, burn."""
-    from subtitler import cli, probe
+    from talk_studio import probe
+    from talk_studio.captions import cli
 
     video = tmp_path / "clip.mov"
     video.write_bytes((FIXTURES / "clip.mov").read_bytes())
@@ -40,7 +41,7 @@ def test_sample_render_end_to_end(tmp_path):
 @pytest.mark.gpu
 @pytest.mark.slow
 def test_second_sample_reuses_cached_alignment(tmp_path):
-    from subtitler import cli
+    from talk_studio.captions import cli
 
     video = tmp_path / "clip.mov"
     video.write_bytes((FIXTURES / "clip.mov").read_bytes())

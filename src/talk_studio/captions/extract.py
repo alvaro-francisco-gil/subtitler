@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import binaries
+from .. import binaries
 
 
 def extract_audio(video: Path, out: Path) -> Path:
