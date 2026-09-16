@@ -81,6 +81,37 @@ def test_unknown_decision_is_a_404(client_and_project):
     assert client.get("/api/decisions/grade").status_code == 404
 
 
+def test_a_failed_background_rerender_marks_pending_candidates_failed(client_and_project, monkeypatch):
+    """A crash in render_round itself (not a per-candidate failure) must not
+    leave the page stuck showing "rendering…" forever with no reason."""
+    client, project = client_and_project
+
+    # Reopen a fresh round so both candidates start "pending" again.
+    chain = tools.get_tool("ffmpeg-chain")
+    project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": 5}), "agent")
+
+    def broken_render_round(project, name):
+        raise RuntimeError("disk full")
+
+    from talk_studio.server import app as app_module
+
+    monkeypatch.setattr(app_module.sampling, "render_round", broken_render_round)
+
+    # TestClient runs background tasks synchronously, so this drives `rerender`.
+    response = client.post("/api/decisions/audio/excerpts", json={"start": 3.0, "end": 5.0})
+    assert response.status_code == 200
+
+    body = client.get("/api/decisions/audio").json()
+    states = {c["label"]: c["state"] for c in body["candidates"]}
+    assert states.get("C") == "failed"
+    failed = next(c for c in body["candidates"] if c["label"] == "C")
+    # Blind: a failed candidate in an open round says it failed, not why or
+    # with what settings.
+    assert failed["error"] == "This candidate failed to render."
+    assert "id" not in failed and "tool" not in failed and "settings" not in failed
+    assert "disk full" not in client.get("/api/decisions/audio").text
+
+
 def test_a_failed_candidate_stays_blind_in_an_open_round(tiny_video, tmp_path, monkeypatch):
     video = tmp_path / "talk.mp4"
     shutil.copyfile(tiny_video, video)

@@ -81,7 +81,7 @@ function render() {
     const b = document.createElement("button");
     b.textContent = e.label;
     if (i === state.excerpt) b.className = "on";
-    b.onclick = async () => { stop(); state.excerpt = i; state.offset = 0; render(); await loadBuffers(); };
+    b.onclick = async () => { stop(); state.excerpt = i; state.offset = 0; render(); await loadBuffers(); schedulePoll(); };
     excerpts.append(b);
   });
 
@@ -229,12 +229,22 @@ function loop() {
 function schedulePoll() {
   clearTimeout(state.poll);
   const v = state.view;
+  // Every excerpt, not just the one on screen: a background re-render (e.g.
+  // after "Sample here" adds a new excerpt) can be in flight for an excerpt
+  // the user has since navigated away from, and polling must not stop while
+  // that render is still pending.
   const waiting = v.candidates.some((c) => c.state === "pending")
-    || Object.values(v.loudness).some((perExcerpt) => typeof perExcerpt[state.excerpt] !== "number");
+    || Object.values(v.loudness).some((perExcerpt) => perExcerpt.some((x) => typeof x !== "number"));
   if (!waiting) return;
   state.poll = setTimeout(async () => {
     if (state.playing) return schedulePoll();
-    await openDecision(state.decision);
+    try {
+      await openDecision(state.decision);
+    } catch (error) {
+      // A transient fetch failure must not silently end polling for the
+      // session — keep trying on the same schedule.
+      schedulePoll();
+    }
   }, 3000);
 }
 

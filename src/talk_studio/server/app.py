@@ -6,7 +6,6 @@ and settings appear once the round has a verdict.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -15,7 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .. import sampling, tools
+from .. import cache, sampling, tools
 from ..project import Candidate, Project, ProjectError
 from ..timecode import Excerpt
 
@@ -79,10 +78,27 @@ def create_app(project_root: Path) -> FastAPI:
         return sampling.sample_file(project, name, tool, candidate.settings, excerpts[index])
 
     def rerender(name: str) -> None:
+        # A background task has nobody to raise to. sampling.render_round
+        # already marks a per-candidate failure through Project (state
+        # "failed", with a log) and keeps going; this catches only a failure
+        # in render_round itself — e.g. the shared "original" sample, or a
+        # stale source — which would otherwise leave every candidate stuck
+        # showing "rendering…" forever with no way for the page to know why.
         try:
             sampling.render_round(load(), name)
-        except Exception as error:  # a background task has nobody to raise to
-            print(f"talk-studio: re-render of {name} failed: {error}", file=sys.stderr)
+        except Exception as error:
+            project = load()
+            round_ = project.open_round(name)
+            if round_ is None:
+                return
+            for candidate in project.round_candidates(name, round_):
+                if candidate.state != "pending":
+                    continue
+                log = cache.log_path(project.root, name, candidate.id)
+                log.parent.mkdir(parents=True, exist_ok=True)
+                log.write_text(f"{type(error).__name__}: {error}\n")
+                candidate.state, candidate.error = "failed", str(log)
+                project.save_candidate(candidate)
 
     @app.get("/")
     def index():
