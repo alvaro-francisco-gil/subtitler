@@ -6,11 +6,23 @@ from talk_studio import final, media, sampling, tools
 from talk_studio.project import Project, ProjectError
 from talk_studio.timecode import Excerpt
 
+from conftest import make_media
+
 
 @pytest.fixture
 def project(tiny_video, tmp_path):
     video = tmp_path / "talk.mp4"
     shutil.copyfile(tiny_video, video)
+    project = Project.init(video, tmp_path / "proj")
+    project.add_excerpt("audio", Excerpt(1.0, 3.0))
+    return project
+
+
+@pytest.fixture
+def drifted_project(tmp_path):
+    """A source whose audio track runs 0.3s longer than its video track."""
+    video = tmp_path / "drifted.mp4"
+    make_media(video, seconds=6.0, audio_seconds=6.3)
     project = Project.init(video, tmp_path / "proj")
     project.add_excerpt("audio", Excerpt(1.0, 3.0))
     return project
@@ -49,3 +61,24 @@ def test_render_rejects_missing_picked_candidate(project):
 
     with pytest.raises(ProjectError, match=f"audio is picked as {picked_id}"):
         final.render(project)
+
+
+def test_render_accepts_a_source_whose_streams_disagree(drifted_project, tmp_path):
+    """A phone recording whose audio and video lengths differ must still render.
+
+    The output video is a bit-exact copy of the source video, so the output's
+    own audio and video streams disagree by the same amount the source does —
+    that is not drift the render introduced, and must not fail validation.
+    """
+    project = drifted_project
+    chain = tools.get_tool("ffmpeg-chain")
+    project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": 20}), "test")
+    sampling.render_round(project, "audio")
+    project.record("audio", "pick", label="A")
+
+    out = final.render(project, tmp_path / "final.mp4")
+
+    src = media.stream_durations(project.source)
+    out_durations = media.stream_durations(out)
+    assert out_durations["video"] == pytest.approx(src["video"], abs=0.05)
+    assert out_durations["audio"] == pytest.approx(src["audio"], abs=0.05)

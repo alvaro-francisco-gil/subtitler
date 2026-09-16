@@ -37,5 +37,13 @@ def render(project: Project, out: Path | None = None) -> Path:
 
     fps = probe.probe(project.source).fps
     tolerance = max(1 / fps, media.AUDIO_TOLERANCE) if fps else media.AUDIO_TOLERANCE
-    media.validate(out, expected=project.duration, tolerance=tolerance, streams=("video", "audio"))
+    # Validate each output stream against the MATCHING source stream, not a
+    # single project-wide duration: a phone source's own audio and video
+    # streams routinely differ by tens to hundreds of ms, and the render must
+    # only be held to not introducing further drift, not to fixing the source.
+    src = media.stream_durations(project.source)
+    for kind in ("video", "audio"):
+        if kind not in src:
+            raise ProjectError(f"{project.source} has no {kind} stream")
+        media.validate(out, expected=src[kind], tolerance=tolerance, streams=(kind,))
     return out

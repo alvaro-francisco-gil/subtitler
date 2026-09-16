@@ -95,7 +95,7 @@ def validate(path: Path, *, expected: float, tolerance: float, streams: tuple[st
                 f"{path.name}: {kind} lasts {durations[kind]:.3f}s, "
                 f"expected {expected:.3f}s (±{tolerance:.3f}s)"
             )
-    if "video" in durations and "audio" in durations:
+    if "video" in streams and "audio" in streams:
         if abs(durations["video"] - durations["audio"]) > tolerance:
             raise RenderError(
                 f"{path.name}: video {durations['video']:.3f}s and audio "
