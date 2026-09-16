@@ -76,3 +76,36 @@ def test_sample_here_adds_an_excerpt(client_and_project):
 def test_unknown_decision_is_a_404(client_and_project):
     client, _ = client_and_project
     assert client.get("/api/decisions/grade").status_code == 404
+
+
+def test_a_failed_candidate_stays_blind_in_an_open_round(tiny_video, tmp_path, monkeypatch):
+    video = tmp_path / "talk.mp4"
+    shutil.copyfile(tiny_video, video)
+    project = Project.init(video, tmp_path / "proj")
+    project.add_excerpt("audio", Excerpt(1.0, 3.0))
+    chain = tools.get_tool("ffmpeg-chain")
+    project.propose("audio", chain.name, chain.version, chain.settings({}), "agent")
+    project.propose("audio", chain.name, chain.version, chain.settings({"denoise_db": 0}), "agent")
+
+    real_get_tool = tools.get_tool
+    calls = {"n": 0}
+
+    def flaky_get_tool(name):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise tools.ToolError("command failed (1): ffmpeg -af denoise_db=37 -i in.wav out.wav")
+        return real_get_tool(name)
+
+    monkeypatch.setattr(sampling.tools, "get_tool", flaky_get_tool)
+    sampling.render_round(project, "audio")
+
+    client = TestClient(create_app(project.root))
+    response = client.get("/api/decisions/audio")
+    assert response.status_code == 200
+    body = response.json()
+    states = {c["label"]: c["state"] for c in body["candidates"]}
+    assert states == {"A": "rendered", "B": "failed"}
+    failed = next(c for c in body["candidates"] if c["label"] == "B")
+    assert failed["error"] and "id" not in failed and "tool" not in failed and "settings" not in failed
+    text = response.text
+    assert "ffmpeg" not in text and "denoise_db" not in text and "ffmpeg-chain" not in text and "c2" not in text

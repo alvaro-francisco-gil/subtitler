@@ -49,8 +49,12 @@ def create_app(project_root: Path) -> FastAPI:
 
     def view(project: Project, candidate: Candidate, *, revealed: bool) -> dict:
         entry = {"label": project.label(candidate), "state": candidate.state, "error": None}
-        if candidate.state == "failed" and candidate.error and Path(candidate.error).exists():
-            entry["error"] = Path(candidate.error).read_text()[:MAX_LOG]
+        if candidate.state == "failed":
+            if revealed and candidate.error and Path(candidate.error).exists():
+                entry["error"] = Path(candidate.error).read_text()[:MAX_LOG]
+            elif not revealed:
+                # An open round is blind: say it failed, not why or on what.
+                entry["error"] = "This candidate failed to render."
         if revealed:
             entry |= {"id": candidate.id, "tool": candidate.tool, "settings": candidate.settings, "proposer": candidate.proposer}
         return entry
