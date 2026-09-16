@@ -88,15 +88,21 @@ class VoiceMaster(_FfmpegMaster):
 
 
 class SpeechLeveler(_FfmpegMaster):
-    """Rides the level phrase by phrase, so quiet sentences come up to the loud ones."""
+    """Normalises the voice wave by wave, evening out syllables rather than squashing peaks.
+
+    `speed` is how fast the gain follows the voice. Below about 0.001 it barely
+    moves and acts as a fixed boost, which level-matched review cannot hear.
+    """
 
     name = "speech-leveler"
-    version = "1"
+    version = "2"
     params = TONE_PARAMS + (
-        Param("max_boost", "float", 4.0, "most a quiet phrase is raised, as a factor", 1.0, 20.0),
-        Param("max_cut", "float", 2.0, "most a loud phrase is lowered, as a factor", 1.0, 20.0),
+        Param("max_boost", "float", 6.0, "most a quiet stretch is raised, as a factor", 1.0, 20.0),
+        Param("max_cut", "float", 3.0, "most a loud stretch is lowered, as a factor", 1.0, 20.0),
+        Param("speed", "float", 0.005, "how fast the gain follows the voice; higher evens out more", 0.001, 0.05),
     )
 
     def filters(self, settings: dict) -> list[str]:
-        leveler = f"speechnorm=e={settings['max_boost']:g}:c={settings['max_cut']:g}:r=0.0001:l=1"
+        speed = f"{settings['speed']:g}"
+        leveler = f"speechnorm=e={settings['max_boost']:g}:c={settings['max_cut']:g}:r={speed}:f={speed}:l=1"
         return tone(settings) + [leveler]

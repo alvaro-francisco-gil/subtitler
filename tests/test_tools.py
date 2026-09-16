@@ -89,7 +89,7 @@ def test_voice_master_filters_follow_settings():
 def test_speech_leveler_ends_with_the_leveler():
     leveler = SpeechLeveler()
     filters = leveler.filters(leveler.settings({"max_boost": 6}))
-    assert filters[-1].startswith("speechnorm=e=6:c=2")
+    assert filters[-1] == "speechnorm=e=6:c=3:r=0.005:f=0.005:l=1"
 
 
 @pytest.mark.parametrize("tool", [VoiceMaster(), SpeechLeveler()], ids=lambda t: t.name)
