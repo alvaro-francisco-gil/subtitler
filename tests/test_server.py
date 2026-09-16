@@ -26,6 +26,9 @@ def test_index_is_served(client_and_project):
     client, _ = client_and_project
     response = client.get("/")
     assert response.status_code == 200 and "talk-studio" in response.text
+    assert 'src="/static/review.js"' in response.text
+    assert client.get("/static/review.js").status_code == 200
+    assert client.get("/static/review.css").status_code == 200
 
 
 def test_open_round_is_blind(client_and_project):

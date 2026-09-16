@@ -1,0 +1,14 @@
+:root { color-scheme: light dark; --accent: #0075b8; font-family: system-ui, sans-serif; }
+body { margin: 0 auto; max-width: 960px; padding: 1rem 1.25rem 3rem; line-height: 1.4; }
+header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; }
+h1 { font-size: 1.2rem; margin: 0; }
+.muted { opacity: 0.7; }
+.row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
+button { font: inherit; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid #8886; background: transparent; color: inherit; cursor: pointer; }
+button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+#seek { flex: 1; min-width: 12rem; }
+textarea { width: 100%; box-sizing: border-box; font: inherit; }
+pre { white-space: pre-wrap; font-size: 0.85rem; }
+kbd { border: 1px solid #8886; border-radius: 4px; padding: 0 0.3rem; }
+#history-list h4 { margin: 0.75rem 0 0.25rem; }
