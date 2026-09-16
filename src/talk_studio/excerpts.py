@@ -69,4 +69,10 @@ def suggest(levels: np.ndarray, *, length: float = 12.0, frame: float = FRAME, m
     take(talking, key=lambda w: w[2], reverse=False)
     take(talking, key=lambda w: w[2], reverse=True)
     take(pauses, key=lambda w: w[3], reverse=True)
+
+    if not chosen and windows:
+        # Fallback: if no targeted picks, select the window with the highest speech ratio.
+        best = max(windows, key=lambda w: w[1])
+        chosen.append(best[0])
+
     return [Excerpt(round(i * frame, 1), round(i * frame + length, 1)) for i in chosen]

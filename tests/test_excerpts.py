@@ -40,3 +40,21 @@ def test_frame_levels_of_generated_media(tiny_video):
     levels = excerpts.frame_levels(tiny_video)
     assert len(levels) == 12
     assert np.all(levels > -60.0) and np.all(levels < 0.0)
+
+
+def test_suggest_fallback_when_all_windows_in_ambiguous_band():
+    # Build an array where every window's speech ratio falls in the ambiguous band (0.4 < ratio < 0.6).
+    # Alternating frames: half above speech threshold, half below, so ratio = 0.5 for every window.
+    levels = np.empty(120)
+    levels[::2] = -30.0  # above floor + 15 dB: this is "speech"
+    levels[1::2] = -50.0  # below floor + 15 dB: this is "noise"
+    # floor = 10th percentile ≈ -50, speech threshold = -50 + 15 = -35
+    # Every 24-frame window has 12 frames at -30 (speech) and 12 at -50 (noise), ratio = 0.5
+
+    picks = excerpts.suggest(levels)
+
+    # With all windows in the ambiguous band, fallback should return at least one excerpt.
+    assert len(picks) >= 1
+    # The excerpt should stay within the source's time span.
+    assert picks[0].start >= 0.0
+    assert picks[0].end <= 60.0  # 120 frames * 0.5 seconds per frame
