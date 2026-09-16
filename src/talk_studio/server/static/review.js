@@ -50,8 +50,15 @@ async function openDecision(name) {
   schedulePoll();
 }
 
+function measured(label) {
+  return typeof state.view.loudness[label]?.[state.excerpt] === "number";
+}
+
 function playable() {
-  return ["original", ...state.view.candidates.filter((c) => c.state === "rendered").map((c) => c.label)];
+  const rendered = state.view.candidates
+    .filter((c) => c.state === "rendered" && measured(c.label))
+    .map((c) => c.label);
+  return measured("original") ? ["original", ...rendered] : rendered;
 }
 
 function button(text, label) {
@@ -79,10 +86,15 @@ function render() {
   });
 
   const candidates = $("candidates");
-  candidates.replaceChildren(button("0 · Original", "original"));
+  const originalButton = button("0 · Original", "original");
+  if (!measured("original")) {
+    originalButton.disabled = true;
+    originalButton.textContent += " · rendering…";
+  }
+  candidates.replaceChildren(originalButton);
   v.candidates.forEach((c, i) => {
     const b = button(`${i + 1} · ${c.label}`, c.label);
-    if (c.state !== "rendered") {
+    if (c.state !== "rendered" || !measured(c.label)) {
       b.disabled = true;
       b.textContent += c.state === "failed" ? " · failed" : " · rendering…";
     }
@@ -189,7 +201,7 @@ function stop() {
 }
 
 function select(label) {
-  if (label !== "original" && !state.buffers[label]) return;
+  if (!state.buffers[label]) return;
   state.selected = label;
   if (state.playing) {
     const now = state.ctx.currentTime;
