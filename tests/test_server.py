@@ -78,7 +78,7 @@ def test_sample_here_adds_an_excerpt(client_and_project):
 
 def test_unknown_decision_is_a_404(client_and_project):
     client, _ = client_and_project
-    assert client.get("/api/decisions/grade").status_code == 404
+    assert client.get("/api/decisions/thumbnail").status_code == 404
 
 
 def test_a_failed_background_rerender_marks_pending_candidates_failed(client_and_project, monkeypatch):
@@ -156,3 +156,20 @@ def test_mastering_waits_for_the_audio_pick(client_and_project):
     assert "audio is open" in body["blocked"] and body["loudness"] == {}
     assert client.get("/api/decisions/master/samples/A/0.wav").status_code == 404
     assert client.get("/api/decisions/audio").json()["reference"] == "Original"
+
+
+def test_a_grade_round_serves_frames_and_readiness(client_and_project):
+    client, project = client_and_project
+    project.set_excerpts("grade", [Excerpt(1.0, 2.0)])
+    eq = tools.get_tool("ffmpeg-eq")
+    project.propose("grade", eq.name, eq.version, eq.settings({"contrast": 1.3}), "agent")
+    sampling.render_round(project, "grade")
+
+    body = client.get("/api/decisions/grade").json()
+    assert body["kind"] == "image" and body["loudness"] == {}
+    assert body["ready"] == {"original": [True], "A": [True]}
+    for label in ("original", "A"):
+        response = client.get(f"/api/decisions/grade/samples/{label}/0.jpg")
+        assert response.status_code == 200 and response.headers["content-type"] == "image/jpeg"
+    assert client.get("/api/decisions/grade/samples/A/0.wav").status_code == 404
+    assert client.get("/api/decisions/audio").json()["ready"]["A"] == [True]

@@ -22,7 +22,7 @@ from . import media
 from .timecode import Excerpt, parse_excerpt
 
 PROJECT_FILE = "project.toml"
-DECISIONS = ("audio", "master")
+DECISIONS = ("audio", "master", "grade")
 # A decision judged on the output of another: its samples are cut from the
 # upstream pick, so changing that pick invalidates it.
 UPSTREAM = {"master": "audio"}

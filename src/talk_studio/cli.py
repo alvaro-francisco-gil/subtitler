@@ -57,7 +57,10 @@ def command_excerpts(args) -> int:
     else:
         if decision.excerpts and not args.replace:
             raise ProjectError(f"{args.decision} already has excerpts; pass --replace to overwrite them")
-        project.set_excerpts(args.decision, excerpts.suggest(excerpts.frame_levels(project.source), length=args.length))
+        if args.decision == "grade":
+            project.set_excerpts(args.decision, excerpts.frames(project.duration))
+        else:
+            project.set_excerpts(args.decision, excerpts.suggest(excerpts.frame_levels(project.source), length=args.length))
     current = [str(e) for e in project.decision(args.decision).excerpts]
     emit(args, "\n".join(current), current)
     return 0

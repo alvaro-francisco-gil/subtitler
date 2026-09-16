@@ -70,3 +70,9 @@ def test_suggest_still_separates_speech_in_a_compressed_recording():
 
     assert len(picks) == 3
     assert all(p.duration == 12.0 for p in picks)
+
+
+def test_frames_spread_across_the_talk():
+    picks = excerpts.frames(600.0)
+    assert [p.start for p in picks] == [50.0, 150.0, 250.0, 350.0, 450.0, 550.0]
+    assert all(p.duration == 1.0 for p in picks)

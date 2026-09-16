@@ -18,7 +18,15 @@
 
     <div id="excerpts" class="row"></div>
 
-    <div class="player row">
+    <div id="frame" hidden>
+      <img id="frame-base" alt="Reference frame">
+      <img id="frame-over" alt="Selected candidate frame">
+      <div id="frame-divider"></div>
+    </div>
+    <p id="frame-hint" class="muted" hidden>Drag across the image: left of the line is the reference, right is the
+      selected candidate. <kbd>1</kbd>–<kbd>9</kbd> candidates · <kbd>0</kbd> reference everywhere.</p>
+
+    <div id="player" class="player row">
       <button id="play">Play</button>
       <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Position">
       <span id="clock" class="muted">0:00</span>
@@ -26,11 +34,11 @@
     </div>
 
     <div id="candidates" class="row"></div>
-    <p class="muted">Keys: <kbd>1</kbd>–<kbd>9</kbd> candidates · <kbd>0</kbd> reference ·
+    <p id="audio-hint" class="muted">Keys: <kbd>1</kbd>–<kbd>9</kbd> candidates · <kbd>0</kbd> reference ·
       <kbd>Space</kbd> play/pause. Levels are matched, so louder does not mean better.</p>
 
     <form id="verdict">
-      <textarea id="note" rows="3" placeholder="What do you hear? Optional for a pick, useful for a reject."></textarea>
+      <textarea id="note" rows="3" placeholder="What do you notice? Optional for a pick, useful for a reject."></textarea>
       <div class="row">
         <button type="button" id="pick">Pick selected</button>
         <button type="button" id="reject">Reject round</button>

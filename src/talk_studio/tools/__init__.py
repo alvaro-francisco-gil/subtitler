@@ -12,7 +12,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import media
+from .. import binaries, media
 from ..timecode import Excerpt
 
 
@@ -69,14 +69,13 @@ class Requirement:
     hint: str
 
 
-class AudioTool:
-    kind = "audio"
+class Tool:
+    kind = ""
     name = ""
     version = ""
     params: tuple[Param, ...] = ()
-    # Seconds decoded before an excerpt and trimmed afterwards, so denoisers and
-    # compressors have settled by the time the human starts listening.
-    preroll = 2.0
+    # What a sample of this tool is saved as.
+    suffix = ".wav"
 
     def requires(self) -> list[Requirement]:
         return []
@@ -89,6 +88,13 @@ class AudioTool:
                 f"{self.name} has no setting {', '.join(unknown)}; it has {', '.join(known) or 'none'}"
             )
         return {name: (param.coerce(raw[name]) if name in raw else param.default) for name, param in known.items()}
+
+
+class AudioTool(Tool):
+    kind = "audio"
+    # Seconds decoded before an excerpt and trimmed afterwards, so denoisers and
+    # compressors have settled by the time the human starts listening.
+    preroll = 2.0
 
     def process(self, src: Path, out: Path, settings: dict) -> None:
         raise NotImplementedError
@@ -122,15 +128,50 @@ class Original(AudioTool):
         shutil.copyfile(src, out)
 
 
-def all_tools() -> list[AudioTool]:
+class GradeTool(Tool):
+    """A colour grade: an ffmpeg video filter chain, sampled as a still frame."""
+
+    kind = "grade"
+    suffix = ".jpg"
+
+    def filters(self, source: Path, settings: dict) -> str:
+        raise NotImplementedError
+
+    def sample(self, source: Path, excerpt: Excerpt, settings: dict, out: Path) -> Path:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        binaries.run([
+            binaries.ffmpeg(), "-y", "-v", "error", "-ss", f"{excerpt.start:.3f}", "-i", str(source),
+            "-frames:v", "1", "-vf", self.filters(source, settings), "-q:v", "2", str(out),
+        ])
+        if not out.exists() or out.stat().st_size == 0:
+            raise media.RenderError(f"{out.name} was not written")
+        return out
+
+
+class OriginalFrame(GradeTool):
+    """The ungraded frame."""
+
+    name = "original"
+    version = "1"
+
+    def filters(self, source: Path, settings: dict) -> str:
+        return "null"
+
+
+def reference_for(decision: str) -> Tool:
+    return OriginalFrame() if decision == "grade" else Original()
+
+
+def all_tools() -> list[Tool]:
     from .deepfilternet import DeepFilterNet
     from .ffmpeg_chain import FfmpegChain
+    from .grade import AutoBalance, FfmpegEq
     from .mastering import SpeechLeveler, VoiceMaster
 
-    return [FfmpegChain(), DeepFilterNet(), VoiceMaster(), SpeechLeveler()]
+    return [FfmpegChain(), DeepFilterNet(), VoiceMaster(), SpeechLeveler(), AutoBalance(), FfmpegEq()]
 
 
-def get_tool(name: str) -> AudioTool:
+def get_tool(name: str) -> Tool:
     for tool in all_tools():
         if tool.name == name:
             return tool

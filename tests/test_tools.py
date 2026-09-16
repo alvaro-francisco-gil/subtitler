@@ -67,6 +67,7 @@ def test_registry():
     assert [(t.name, t.kind) for t in tools.all_tools()] == [
         ("ffmpeg-chain", "audio"), ("deepfilternet", "audio"),
         ("voice-master", "master"), ("speech-leveler", "master"),
+        ("auto-balance", "grade"), ("ffmpeg-eq", "grade"),
     ]
     assert tools.get_tool("ffmpeg-chain").version == "1"
     with pytest.raises(ToolError, match="no tool named"):
@@ -96,3 +97,28 @@ def test_speech_leveler_ends_with_the_leveler():
 def test_mastering_tools_render_the_excerpt_length(tool, tiny_video, tmp_path):
     out = tool.sample(tiny_video, Excerpt(2.5, 4.5), tool.settings({}), tmp_path / "m.wav")
     assert media.stream_durations(out)["audio"] == pytest.approx(2.0, abs=media.AUDIO_TOLERANCE)
+
+
+def test_ffmpeg_eq_is_a_no_op_by_default(tiny_video):
+    from talk_studio.tools.grade import FfmpegEq
+    eq = FfmpegEq()
+    assert eq.filters(tiny_video, eq.settings({})) == "null"
+    chain = eq.filters(tiny_video, eq.settings({"tint": -0.1, "contrast": 1.2, "temperature": 5600}))
+    assert chain == "colortemperature=temperature=5600,colorbalance=gs=-0.1:gm=-0.1:gh=-0.1,eq=contrast=1.2"
+
+
+def test_auto_balance_removes_a_green_cast(tmp_path):
+    from talk_studio import binaries
+    from talk_studio.tools.grade import AutoBalance, channel_gains
+    video = tmp_path / "green.mp4"
+    binaries.run([
+        binaries.ffmpeg(), "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=3",
+        "-vf", "colorchannelmixer=rr=0.8:bb=0.9", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video),
+    ])
+    red, green, blue = channel_gains(video, "white-patch")
+    assert red > 1.1 and blue > 1.0 and green == pytest.approx(1.0, abs=0.02)
+
+    balance = AutoBalance()
+    assert balance.filters(video, balance.settings({"strength": 0})).startswith("colorchannelmixer=rr=1.0000:gg=1.0000:bb=1.0000")
+    out = balance.sample(video, Excerpt(1.0, 2.0), balance.settings({}), tmp_path / "frame.jpg")
+    assert out.exists() and out.stat().st_size > 0

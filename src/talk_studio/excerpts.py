@@ -36,6 +36,11 @@ def frame_levels(source: Path) -> np.ndarray:
     return 20 * np.log10(np.maximum(rms, 1e-6))
 
 
+def frames(duration: float, count: int = 6) -> list[Excerpt]:
+    """Evenly spaced one-second moments for judging a grade on stills."""
+    return [Excerpt(round(duration * (i + 0.5) / count, 1), round(duration * (i + 0.5) / count + 1.0, 1)) for i in range(count)]
+
+
 def suggest(levels: np.ndarray, *, length: float = 12.0, frame: float = FRAME, margin: float = 2.0) -> list[Excerpt]:
     """Up to three non-overlapping excerpts: quietest speech, loudest speech, noisiest pause."""
     width = int(round(length / frame))

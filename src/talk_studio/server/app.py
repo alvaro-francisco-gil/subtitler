@@ -73,7 +73,7 @@ def create_app(project_root: Path) -> FastAPI:
             except ProjectError as error:
                 raise HTTPException(404, str(error)) from None
         if label == "original":
-            return sampling.sample_file(project, name, tools.Original(), {}, excerpts[index])
+            return sampling.sample_file(project, name, tools.reference_for(name), {}, excerpts[index])
         round_ = project.open_round(name)
         if round_ is None:
             raise HTTPException(404, "no open round")
@@ -139,16 +139,21 @@ def create_app(project_root: Path) -> FastAPI:
             except ProjectError as error:
                 blocked = str(error)
 
-        loudness = {}
+        loudness, ready = {}, {}
         if round_ and not blocked:
             count = len(decision.excerpts)
             for label in ["original", *[project.label(c) for c in members]]:
-                loudness[label] = [sampling.loudness(sample_path(project, name, label, i)) for i in range(count)]
+                paths = [sample_path(project, name, label, i) for i in range(count)]
+                ready[label] = [sampling.ready(path) for path in paths]
+                if name != "grade":
+                    loudness[label] = [sampling.loudness(path) for path in paths]
 
         return {
             "name": name,
             "status": decision.status,
+            "kind": "image" if name == "grade" else "audio",
             "reference": REFERENCE.get(name, "Original"),
+            "ready": ready,
             "blocked": blocked,
             "excerpts": excerpt_list(project, name),
             "open_round": round_,
@@ -164,14 +169,21 @@ def create_app(project_root: Path) -> FastAPI:
             ],
         }
 
-    @app.get("/api/decisions/{name}/samples/{label}/{index}.wav")
-    def sample(name: str, label: str, index: int):
+    def serve(name: str, label: str, index: int, suffix: str, media_type: str):
         project = load()
         require(project, name)
         path = sample_path(project, name, label, index)
-        if not path.exists():
+        if path.suffix != suffix or not path.exists():
             raise HTTPException(404, "sample not rendered yet")
-        return FileResponse(path, media_type="audio/wav")
+        return FileResponse(path, media_type=media_type)
+
+    @app.get("/api/decisions/{name}/samples/{label}/{index}.wav")
+    def sample(name: str, label: str, index: int):
+        return serve(name, label, index, ".wav", "audio/wav")
+
+    @app.get("/api/decisions/{name}/samples/{label}/{index}.jpg")
+    def frame(name: str, label: str, index: int):
+        return serve(name, label, index, ".jpg", "image/jpeg")
 
     @app.post("/api/decisions/{name}/feedback")
     def feedback(name: str, body: FeedbackIn):

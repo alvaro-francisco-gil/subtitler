@@ -45,7 +45,7 @@ def test_load_without_project_file(tmp_path):
 
 def test_unknown_decision(project):
     with pytest.raises(ProjectError, match="unknown decision"):
-        project.decision("grade")
+        project.decision("thumbnail")
 
 
 def test_excerpts_are_validated_and_deduplicated(project):

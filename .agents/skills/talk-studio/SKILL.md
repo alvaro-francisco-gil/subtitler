@@ -29,7 +29,13 @@ You explore; the human judges. Never pick for them, and never skip the review pa
    levelling). Notes translate as: "thin" → more `warmth_db` or less `presence_db`;
    "harsh" or "hissy" → more `deess`, less `air_db`; "flat" or "lifeless" → a gentler
    `ratio`; "quiet bits get lost" → `speech-leveler` with a higher `max_boost`.
-8. On the last pick, stop. `talk-studio render --project <dir>` produces the final file
+8. `grade` is independent of the audio: `excerpts suggest grade` picks six stills spread
+   across the talk, and the page shows each with a before/after divider. Put
+   `auto-balance` (measures and removes the cast) against `ffmpeg-eq` (manual temperature,
+   tint and tone). Notes translate as: "green" or "sickly" → `auto-balance` or a negative
+   `tint`; "washed out" → `contrast` 1.1–1.2; "faces too dark" → `gamma` above 1;
+   "too orange" → a lower `strength` or a higher `temperature`.
+9. On the last pick, stop. `talk-studio render --project <dir>` produces the final file
    at -14 LUFS / -1 dBTP. Never propose loudness as a candidate; the render owns it.
 
 ## Rules

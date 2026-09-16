@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const state = {
   decision: null, view: null, duration: 0, excerpt: 0, selected: "original",
-  ctx: null, buffers: {}, gains: {}, sources: [], playing: false, startedAt: 0, offset: 0, poll: null,
+  ctx: null, buffers: {}, gains: {}, sources: [], playing: false, startedAt: 0, offset: 0, poll: null, split: 50,
 };
 
 async function api(path, options) {
@@ -55,7 +55,19 @@ async function openDecision(name) {
 }
 
 function measured(label) {
-  return typeof state.view.loudness[label]?.[state.excerpt] === "number";
+  return state.view.ready?.[label]?.[state.excerpt] === true;
+}
+
+const isImage = () => state.view?.kind === "image";
+
+function sampleUrl(label, extension) {
+  const v = state.view;
+  // The round in the query: label A is a different candidate in every round.
+  return `/api/decisions/${v.name}/samples/${label}/${state.excerpt}.${extension}?round=${v.open_round}`;
+}
+
+function available(label) {
+  return isImage() ? measured(label) : Boolean(state.buffers[label]);
 }
 
 function playable() {
@@ -86,7 +98,7 @@ function render() {
   excerpts.replaceChildren();
   v.excerpts.forEach((e, i) => {
     const b = document.createElement("button");
-    b.textContent = e.label;
+    b.textContent = isImage() ? fmt(e.start) : e.label;
     if (i === state.excerpt) b.className = "on";
     b.onclick = async () => { stop(); state.excerpt = i; state.offset = 0; render(); await loadBuffers(); schedulePoll(); };
     excerpts.append(b);
@@ -118,6 +130,12 @@ function render() {
   });
 
   $("verdict").hidden = !v.open_round;
+  const image = isImage();
+  $("frame").hidden = !image;
+  $("frame-hint").hidden = !image;
+  $("player").hidden = image;
+  $("audio-hint").hidden = image;
+  if (image) drawFrame();
   const ready = Boolean(state.buffers.original);
   $("play").disabled = !ready && !state.playing;
   $("play").title = ready ? "" : v.open_round ? "Loading samples…" : "Nothing to play: this decision has no open round.";
@@ -142,14 +160,30 @@ function render() {
   }
 }
 
+function drawFrame() {
+  if (!measured("original")) return;
+  const base = sampleUrl("original", "jpg");
+  const over = sampleUrl(available(state.selected) ? state.selected : "original", "jpg");
+  if ($("frame-base").getAttribute("src") !== base) $("frame-base").src = base;
+  if ($("frame-over").getAttribute("src") !== over) $("frame-over").src = over;
+  $("frame-over").style.clipPath = `inset(0 0 0 ${state.split}%)`;
+  $("frame-divider").style.left = `${state.split}%`;
+}
+
 async function loadBuffers() {
   const v = state.view;
   state.buffers = {};
+  if (isImage()) {
+    // Warm the browser cache so switching candidates is instant.
+    for (const label of playable()) new Image().src = sampleUrl(label, "jpg");
+    render();
+    return;
+  }
   if (!v.excerpts.length) { render(); return; }
   state.ctx = state.ctx || new AudioContext();
   await Promise.all(playable().map(async (label) => {
     try {
-      const response = await fetch(`/api/decisions/${v.name}/samples/${label}/${state.excerpt}.wav`);
+      const response = await fetch(sampleUrl(label, "wav"));
       if (!response.ok) return;
       state.buffers[label] = await state.ctx.decodeAudioData(await response.arrayBuffer());
     } catch (error) {
@@ -178,7 +212,7 @@ function position() {
 }
 
 function play() {
-  if (!state.buffers.original) return;
+  if (isImage() || !state.buffers.original) return;
   state.ctx.resume();
   const when = state.ctx.currentTime + 0.05;
   state.sources = [];
@@ -217,7 +251,7 @@ function stop() {
 }
 
 function select(label) {
-  if (!state.buffers[label]) return;
+  if (!available(label)) return;
   state.selected = label;
   if (state.playing) {
     const now = state.ctx.currentTime;
@@ -250,7 +284,7 @@ function schedulePoll() {
   // the user has since navigated away from, and polling must not stop while
   // that render is still pending.
   const waiting = v.candidates.some((c) => c.state === "pending")
-    || Object.values(v.loudness).some((perExcerpt) => perExcerpt.some((x) => typeof x !== "number"));
+    || Object.values(v.ready || {}).some((perExcerpt) => perExcerpt.some((x) => x !== true));
   if (!waiting) return;
   state.poll = setTimeout(async () => {
     if (state.playing) return schedulePoll();
@@ -310,7 +344,7 @@ $("sample-here").onclick = async () => {
 
 document.addEventListener("keydown", (event) => {
   if (event.target.tagName === "TEXTAREA" || !state.view) return;
-  if (event.code === "Space") {
+  if (event.code === "Space" && !isImage()) {
     event.preventDefault();
     state.playing ? stop() : play();
   } else if (event.key === "0") {
@@ -320,5 +354,14 @@ document.addEventListener("keydown", (event) => {
     if (candidate) select(candidate.label);
   }
 });
+
+function dragSplit(event) {
+  const box = $("frame").getBoundingClientRect();
+  state.split = Math.min(100, Math.max(0, ((event.clientX - box.left) / box.width) * 100));
+  drawFrame();
+}
+$("frame").onpointerdown = (event) => { $("frame").setPointerCapture(event.pointerId); dragSplit(event); };
+$("frame").onpointermove = (event) => { if (event.buttons) dragSplit(event); };
+$("frame").ondblclick = () => { state.split = 50; drawFrame(); };
 
 loadProject().catch((error) => { document.body.textContent = `talk-studio: ${error.message}`; });

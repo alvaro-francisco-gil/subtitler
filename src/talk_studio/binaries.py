@@ -42,3 +42,13 @@ def run(args: list[str]) -> subprocess.CompletedProcess[str]:
             f"command failed ({result.returncode}): {' '.join(args)}\n{result.stderr}"
         )
     return result
+
+
+def run_bytes(args: list[str]) -> bytes:
+    """Run a command and return its raw stdout. Raises BinaryError on non-zero exit."""
+    result = subprocess.run(args, capture_output=True)
+    if result.returncode != 0:
+        raise BinaryError(
+            f"command failed ({result.returncode}): {' '.join(args)}\n{result.stderr.decode(errors='replace')}"
+        )
+    return result.stdout

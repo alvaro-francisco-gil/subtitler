@@ -142,3 +142,33 @@ def test_render_refuses_an_unpicked_mastering_round(project):
     project.propose("master", master.name, master.version, master.settings({}), "test")
     with pytest.raises(ProjectError, match="master is open"):
         final.render(project)
+
+
+def test_render_re_encodes_through_the_picked_grade(project, tmp_path):
+    pick_audio(project)
+    eq = tools.get_tool("ffmpeg-eq")
+    project.set_excerpts("grade", [Excerpt(1.0, 2.0)])
+    project.propose("grade", eq.name, eq.version, eq.settings({"saturation": 0}), "test")
+    assert sampling.render_round(project, "grade").rendered == ["c1"]
+    project.record("grade", "pick", label="A")
+
+    out = final.render(project, tmp_path / "graded.mp4")
+
+    import numpy as np
+    from talk_studio import binaries
+    raw = binaries.run_bytes([
+        binaries.ffmpeg(), "-v", "error", "-ss", "2", "-i", str(out), "-frames:v", "1",
+        "-f", "rawvideo", "-pix_fmt", "yuv420p", "-",
+    ])
+    luma = 320 * 240
+    chroma = np.frombuffer(raw, dtype=np.uint8)[luma:].astype(float)
+    assert chroma.std() < 1.5  # saturation 0: no colour left anywhere in the frame
+    assert media.stream_durations(out)["video"] == pytest.approx(6.0, abs=0.1)
+
+
+def test_render_refuses_an_unpicked_grade_round(project):
+    pick_audio(project)
+    eq = tools.get_tool("ffmpeg-eq")
+    project.propose("grade", eq.name, eq.version, eq.settings({}), "test")
+    with pytest.raises(ProjectError, match="grade is open"):
+        final.render(project)

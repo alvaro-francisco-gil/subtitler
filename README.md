@@ -4,7 +4,7 @@ Agents propose edits to a recorded talk; a human picks what feels right.
 
 An agent tries several very different treatments — today, audio clean-up with
 ffmpeg filters or DeepFilterNet, then mastering with a vocal chain or a phrase
-leveler — and renders each on the same short excerpts.
+leveler, then colour grading — and renders each on the same short excerpts.
 You open the review page, switch between them blind with matched levels, and
 pick one or reject the round with a note. The agent reads the note and tries
 again. Only picks reach the final render.
@@ -23,6 +23,11 @@ uv run talk-studio excerpts suggest master --project ./talk-project
 uv run talk-studio propose master --tool voice-master --project ./talk-project
 uv run talk-studio propose master --tool speech-leveler --project ./talk-project
 uv run talk-studio sample master --project ./talk-project
+# colour, judged on stills with a before/after divider
+uv run talk-studio excerpts suggest grade --project ./talk-project
+uv run talk-studio propose grade --tool auto-balance --project ./talk-project
+uv run talk-studio propose grade --tool ffmpeg-eq --set tint=-0.1 --project ./talk-project
+uv run talk-studio sample grade --project ./talk-project
 uv run talk-studio render --project ./talk-project
 ```
 

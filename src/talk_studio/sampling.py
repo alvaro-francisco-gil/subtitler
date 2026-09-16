@@ -31,7 +31,7 @@ def _build(path: Path, render) -> Path:
     """Render to a writer-unique partial file and move it into place."""
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        partial = path.with_suffix(f".{os.getpid()}-{uuid.uuid4().hex[:8]}.partial.wav")
+        partial = path.with_suffix(f".{os.getpid()}-{uuid.uuid4().hex[:8]}.partial{path.suffix}")
         try:
             render(partial)
             os.replace(partial, path)
@@ -59,7 +59,7 @@ def source_for(project: Project, decision: str) -> Path:
     return working_audio(project, decision) if decision in UPSTREAM else project.source
 
 
-def sample_file(project: Project, decision: str, tool: tools.AudioTool, settings: dict, excerpt: Excerpt) -> Path:
+def sample_file(project: Project, decision: str, tool: tools.Tool, settings: dict, excerpt: Excerpt) -> Path:
     # A downstream decision's samples depend on the upstream pick too, so a
     # different pick never serves a stale sample from the cache.
     fingerprint = project.fingerprint
@@ -69,7 +69,12 @@ def sample_file(project: Project, decision: str, tool: tools.AudioTool, settings
         fingerprint=fingerprint, tool=tool.name, version=tool.version,
         settings=settings, excerpt=str(excerpt),
     )
-    return cache.project_dir(project.root) / "samples" / decision / f"{key}.wav"
+    return cache.project_dir(project.root) / "samples" / decision / f"{key}{tool.suffix}"
+
+
+def ready(path: Path) -> bool:
+    """A sample the page can show: an image that exists, or audio whose loudness is measured."""
+    return path.exists() if path.suffix != ".wav" else loudness(path) is not None
 
 
 def loudness(path: Path) -> float | None:
@@ -79,7 +84,7 @@ def loudness(path: Path) -> float | None:
     return json.loads(meta.read_text())["lufs"]
 
 
-def ensure_sample(project: Project, decision: str, tool: tools.AudioTool, settings: dict, excerpt: Excerpt) -> Path:
+def ensure_sample(project: Project, decision: str, tool: tools.Tool, settings: dict, excerpt: Excerpt) -> Path:
     path = sample_file(project, decision, tool, settings, excerpt)
     if not path.exists():
         source = source_for(project, decision)
@@ -88,7 +93,7 @@ def ensure_sample(project: Project, decision: str, tool: tools.AudioTool, settin
         # are the reachable case) must never share a partial path, or each
         # can validate and replace a file the other is still writing.
         _build(path, lambda partial: tool.sample(source, excerpt, settings, partial))
-    if loudness(path) is None:
+    if path.suffix == ".wav" and loudness(path) is None:
         path.with_suffix(".json").write_text(json.dumps({"lufs": media.integrated_loudness(path)}))
     return path
 
@@ -111,7 +116,7 @@ def render_round(project: Project, decision: str) -> RoundReport:
         project.picked(UPSTREAM[decision])
 
     for excerpt in excerpts:
-        ensure_sample(project, decision, tools.Original(), {}, excerpt)
+        ensure_sample(project, decision, tools.reference_for(decision), {}, excerpt)
 
     report = RoundReport()
     for candidate in project.round_candidates(decision, round_):
