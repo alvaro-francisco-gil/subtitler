@@ -1,4 +1,31 @@
-# subtitler
+# talk-studio
+
+Agents propose edits to a recorded talk; a human picks what feels right.
+
+An agent tries several very different treatments — today, audio clean-up with
+ffmpeg filters or DeepFilterNet — and renders each on the same short excerpts.
+You open the review page, switch between them blind with matched levels, and
+pick one or reject the round with a note. The agent reads the note and tries
+again. Only picks reach the final render.
+
+```bash
+uv sync
+uv run talk-studio doctor
+uv run talk-studio init talk.mp4 --project ./talk-project
+uv run talk-studio excerpts suggest audio --project ./talk-project
+uv run talk-studio propose audio --tool ffmpeg-chain --project ./talk-project
+uv run talk-studio propose audio --tool deepfilternet --project ./talk-project
+uv run talk-studio sample audio --project ./talk-project
+uv run talk-studio review --project ./talk-project     # open http://localhost:8765/
+uv run talk-studio render --project ./talk-project
+```
+
+Agents: see [.agents/skills/talk-studio/SKILL.md](.agents/skills/talk-studio/SKILL.md).
+
+## Captions
+
+The original subtitler pipeline, now `talk-studio captions`. It becomes a set of
+talk-studio tools in a later step.
 
 Burn karaoke-style subtitles into a video from a transcript you already have.
 
@@ -61,14 +88,14 @@ The sample loop is the point. Render ten seconds, look at it, edit
 
 ```bash
 # align only: produces words.json and the drift report, renders nothing
-uv run subtitler align video.mov transcript.txt
+uv run talk-studio captions align video.mov transcript.txt
 
 # a short sample to judge the style (defaults to the densest speech it finds)
-uv run subtitler sample video.mov transcript.txt --len 10
-uv run subtitler sample video.mov transcript.txt --at 2:15 --len 10
+uv run talk-studio captions sample video.mov transcript.txt --len 10
+uv run talk-studio captions sample video.mov transcript.txt --at 2:15 --len 10
 
 # the whole video
-uv run subtitler render video.mov transcript.txt
+uv run talk-studio captions render video.mov transcript.txt
 ```
 
 Useful flags: `--style FILE` to use a different style file, `--out FILE` to
