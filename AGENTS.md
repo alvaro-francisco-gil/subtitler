@@ -11,3 +11,9 @@ picks what feels right from rendered samples. Design:
   `process()`; heavy models run in pinned `uvx` environments.
 - No project material in this repo: recordings, transcripts and project folders live
   beside the material they describe.
+
+## Shared agent setup
+
+`AGENTS.md` is the shared instruction entry point. Project skills live in
+`.agents/skills/`; `.claude/skills` points to that directory. See
+[`.agents/README.md`](.agents/README.md) for discovery requirements and dependencies.
