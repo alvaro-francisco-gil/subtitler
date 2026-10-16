@@ -6,7 +6,7 @@
 edits to a recorded talk using several different tools, and a human picks what
 feels right from rendered samples.
 
-**Plans:** step 1 — [../ready/talk-studio-core-audio.md](../ready/talk-studio-core-audio.md)
+**Plans:** steps 1 (core and audio, merged `9b59198`), 2 (grade, `61f103e`), 5 (clips, `54b7604`) and 6 (publish, `95fec84`) have landed, with mastering added as its own decision (`7377e56`); steps 3 (captions) and 4 (thumbnails) have no plan yet.
 
 ## Context
 
@@ -80,7 +80,7 @@ Initial tools, in build order:
 | Kind | Tools |
 |---|---|
 | audio | `ffmpeg-chain` (high-pass, `afftdn`/`arnndn` denoise, compressor, `loudnorm`), `deepfilternet` |
-| grade | `ffmpeg-eq` (exposure, contrast, saturation, gamma, temperature, curves), `lut` |
+| grade | `ffmpeg-eq` (exposure, contrast, saturation, gamma, temperature, curves), `auto-balance`; `lut` not built |
 | captions | `aligned-srt` (existing alignment → cues → `.srt`/`.vtt`), `burn-in` (existing ASS render) |
 | thumbnail | `html-template` (template + cutout via rembg, rendered with headless Chromium) |
 | clip | `vertical-karaoke` (9:16 crop + existing karaoke render) |
@@ -208,8 +208,7 @@ talk-studio doctor
 
 - `subtitler` is renamed `talk-studio`, locally and on GitHub. Its caption code moves
   into the `captions` and `clip` tools.
-- Plans follow the `docs/plans/{ideas,ready,ongoing}/` lifecycle; the existing
-  `docs/superpowers/` files move there when implementation starts.
+- Plans follow the `docs/plans/{ideas,ready,ongoing}/` lifecycle.
 - Project material stays out of the tool repo: no source transcripts, recordings
   or project folders. Projects live beside the material they describe; test fixtures
   are the exception.
