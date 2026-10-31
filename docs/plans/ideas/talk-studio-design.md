@@ -119,7 +119,7 @@ Sketch of `project.toml`:
 
 ```toml
 [source]
-path = "/mnt/c/Users/…/talk.mp4"
+path = "/home/powervaro/Videos/…/talk.mp4"
 fingerprint = "…"
 
 [decisions.audio]
@@ -140,7 +140,8 @@ pick = "c7"
 ## Review page
 
 A local FastAPI server (no front-end build step) serving
-plain HTML and JavaScript. It runs in WSL and is opened from the Windows browser.
+plain HTML and JavaScript. It runs on the Linux desktop and is opened in the browser
+on the same machine, at `http://127.0.0.1:<port>`.
 
 - **Audio:** all samples of an excerpt are decoded into Web Audio buffers and played
   in lock-step; keys `1`–`9` switch candidate without losing position, `0` is the
