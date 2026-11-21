@@ -1,7 +1,10 @@
 # Run the fast tests on every push
 
 **Priority:** medium — 14 of 68 commits in 90 days were fixes, and the public repo has no CI: the suite runs only when someone remembers
-**Gate:** decision:Add a GitHub Actions workflow that runs `uv run pytest -m "not gpu and not slow"` on every push and pull request, installing without torch and its CUDA wheels?
+**Gate:** none
+**Next:** add the workflow
+
+**Decided (Álvaro, 2026-11-21, in the decision deck):** yes, a GitHub Actions check of the fast tests on every push and pull request, without the GPU packages.
 
 **Goal:** Every push and pull request runs the fast suite with ffmpeg on a clean machine, so a regression is caught by the push that causes it instead of the next session that runs tests.
 
