@@ -1,8 +1,8 @@
 # One table for what each decision kind is
 
 **Priority:** medium — the review/server/sampling cluster is the hottest code (review.js churn 8, app.py 6, cli.py 7), and every new decision kind has touched five to seven of those files together
-**Gate:** none
-**Next:** a worker builds it on branch `advance/decision-kinds` (started 2026-11-22); PR next
+**Gate:** blocked:Álvaro reviews and merges PR #2
+**Next:** PR #2 (branch `advance/decision-kinds`) is open: 298 fast tests pass, gpu/slow not run; once merged, retire this plan
 
 Decided 2026-11-22 (Álvaro, decision deck round 3): yes — Move what each decision kind is (tool kind, reference, media, upstream, inputs, excerpt suggester) into one `decisions.py` table, with no change in behaviour, before the captions and thumbnail steps add two more kinds?
 
