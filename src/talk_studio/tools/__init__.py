@@ -162,19 +162,6 @@ class OriginalFrame(GradeTool):
         return "null"
 
 
-def reference_for(decision: str) -> Tool:
-    if decision.startswith("clip-"):
-        from .clips import ClipOriginal
-
-        return ClipOriginal()
-    return OriginalFrame() if decision == "grade" else Original()
-
-
-def kind_of(decision: str) -> str:
-    """The tool kind a decision takes: its own name, or `clip` for every clip."""
-    return "clip" if decision.startswith("clip-") else decision
-
-
 def all_tools() -> list[Tool]:
     from .deepfilternet import DeepFilterNet
     from .ffmpeg_chain import FfmpegChain

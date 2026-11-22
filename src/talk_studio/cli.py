@@ -15,7 +15,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from . import binaries, cache, excerpts, final, media, sampling, tools, youtube
+from . import binaries, cache, decisions, final, media, sampling, tools, youtube
 from .project import Project, ProjectError
 from .timecode import parse_excerpt
 
@@ -58,10 +58,7 @@ def command_excerpts(args) -> int:
     else:
         if decision.excerpts and not args.replace:
             raise ProjectError(f"{args.decision} already has excerpts; pass --replace to overwrite them")
-        if args.decision == "grade":
-            project.set_excerpts(args.decision, excerpts.frames(project.duration))
-        else:
-            project.set_excerpts(args.decision, excerpts.suggest(excerpts.frame_levels(project.source), length=args.length))
+        project.set_excerpts(args.decision, decisions.kind_for(args.decision).suggest(project, args.length))
     current = [str(e) for e in project.decision(args.decision).excerpts]
     emit(args, "\n".join(current), current)
     return 0
@@ -71,7 +68,7 @@ def command_propose(args) -> int:
     project = Project.load(args.project)
     tool = tools.get_tool(args.tool)
     project.decision(args.decision)
-    kind = tools.kind_of(args.decision)
+    kind = decisions.kind_for(args.decision).tool_kind
     if tool.kind != kind:
         fitting = ", ".join(t.name for t in tools.all_tools() if t.kind == kind) or "none yet"
         raise ProjectError(f"{tool.name} is an {tool.kind} tool; tools for {args.decision}: {fitting}")
@@ -170,14 +167,14 @@ def command_render(args) -> int:
 def command_status(args) -> int:
     project = Project.load(args.project)
     matches = project.check_source()
-    decisions = {}
+    summary = {}
     lines = [f"source {project.source} ({project.duration:.1f}s)" + ("" if matches else " — CHANGED, picks are stale")]
     for decision in project.decisions.values():
         open_round = project.open_round(decision.name)
         states: dict[str, int] = {}
         for c in project.round_candidates(decision.name, open_round) if open_round else []:
             states[c.state] = states.get(c.state, 0) + 1
-        decisions[decision.name] = {
+        summary[decision.name] = {
             "status": decision.status, "pick": decision.pick,
             "excerpts": [str(e) for e in decision.excerpts],
             "open_round": open_round, "candidates": states,
@@ -188,7 +185,7 @@ def command_status(args) -> int:
             + f", {len(decision.excerpts)} excerpts"
             + (f", round {open_round}: {states}" if open_round else "")
         )
-    emit(args, "\n".join(lines), {"source_matches": matches, "decisions": decisions})
+    emit(args, "\n".join(lines), {"source_matches": matches, "decisions": summary})
     return 0
 
 
@@ -220,13 +217,13 @@ def command_clips(args) -> int:
         args.out.mkdir(parents=True, exist_ok=True)
         exported = []
         for name, decision in project.decisions.items():
-            if not name.startswith("clip-") or decision.status != "picked":
+            if decisions.kind_for(name) is not decisions.CLIP or decision.status != "picked":
                 continue
             candidate = project.picked(name)
             sample = sampling.sample_file(project, name, tools.get_tool(candidate.tool), candidate.settings, decision.excerpts[0])
             if not sample.exists():
                 raise ProjectError(f"{name}: the picked render is missing; run `talk-studio sample {name}`")
-            target = args.out / f"{name.removeprefix('clip-')}.mp4"
+            target = args.out / f"{name.removeprefix(decisions.CLIP.prefix)}.mp4"
             shutil.copyfile(sample, target)
             exported.append(str(target))
         emit(args, "\n".join(exported) or "no clip is picked yet", exported)

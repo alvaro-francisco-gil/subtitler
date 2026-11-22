@@ -14,8 +14,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import binaries, cache, media, tools
-from .project import UPSTREAM, Project, ProjectError, is_clip
+from . import binaries, cache, decisions, media, tools
+from .project import Project, ProjectError
 from .timecode import Excerpt
 from .tools.mastering import WORKING_LUFS
 
@@ -52,7 +52,7 @@ def picked_audio(project: Project, name: str) -> Path:
 
 def working_audio(project: Project, decision: str) -> Path:
     """What a downstream decision is judged on: its upstream pick, set to the working level."""
-    upstream = picked_audio(project, UPSTREAM[decision])
+    upstream = picked_audio(project, decisions.kind_for(decision).upstream)
     path = upstream.with_name(f"{upstream.stem}-working.wav")
     return _build(path, lambda partial: media.set_loudness(upstream, partial, target=WORKING_LUFS))
 
@@ -82,20 +82,22 @@ def identity(path: Path) -> str:
 
 
 def source_for(project: Project, decision: str) -> Path:
-    if is_clip(decision):
+    kind = decisions.kind_for(decision)
+    if kind.from_final:
         return clip_inputs(project)[0]
-    return working_audio(project, decision) if decision in UPSTREAM else project.source
+    return working_audio(project, decision) if kind.upstream else project.source
 
 
 def sample_file(project: Project, decision: str, tool: tools.Tool, settings: dict, excerpt: Excerpt) -> Path:
     # A downstream decision's samples depend on the upstream pick too, so a
     # different pick never serves a stale sample from the cache.
+    kind = decisions.kind_for(decision)
     fingerprint = project.fingerprint
-    if is_clip(decision):
+    if kind.from_final:
         video, words = clip_inputs(project)
         fingerprint = f"{identity(video)}+words:{hashlib.sha256(words.read_bytes()).hexdigest()[:16]}"
-    elif decision in UPSTREAM:
-        fingerprint = f"{fingerprint}+{_upstream_key(project, UPSTREAM[decision])}@{WORKING_LUFS:g}"
+    elif kind.upstream:
+        fingerprint = f"{fingerprint}+{_upstream_key(project, kind.upstream)}@{WORKING_LUFS:g}"
     key = cache.sample_key(
         fingerprint=fingerprint, tool=tool.name, version=tool.version,
         settings=settings, excerpt=str(excerpt),
@@ -123,7 +125,7 @@ def ensure_sample(project: Project, decision: str, tool: tools.Tool, settings: d
         # server's background re-render and a concurrent `talk-studio sample`
         # are the reachable case) must never share a partial path, or each
         # can validate and replace a file the other is still writing.
-        extra = {"words": project.words} if is_clip(decision) else {}
+        extra = {"words": project.words} if decisions.kind_for(decision).from_final else {}
         _build(path, lambda partial: tool.sample(source, excerpt, settings, partial, **extra))
     if path.suffix == ".wav" and loudness(path) is None:
         path.with_suffix(".json").write_text(json.dumps({"lufs": media.integrated_loudness(path)}))
@@ -144,13 +146,11 @@ def render_round(project: Project, decision: str) -> RoundReport:
     if round_ is None:
         raise ProjectError(f"{decision} has no open round; propose candidates first")
     project.check_source()
-    if decision in UPSTREAM:
-        project.picked(UPSTREAM[decision])
-    if is_clip(decision):
-        clip_inputs(project)
+    decisions.preconditions(project, decision)
 
+    reference = decisions.kind_for(decision).reference()
     for excerpt in excerpts:
-        ensure_sample(project, decision, tools.reference_for(decision), {}, excerpt)
+        ensure_sample(project, decision, reference, {}, excerpt)
 
     report = RoundReport()
     for candidate in project.round_candidates(decision, round_):
