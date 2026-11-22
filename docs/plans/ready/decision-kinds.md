@@ -1,7 +1,10 @@
 # One table for what each decision kind is
 
 **Priority:** medium — the review/server/sampling cluster is the hottest code (review.js churn 8, app.py 6, cli.py 7), and every new decision kind has touched five to seven of those files together
-**Gate:** decision:Move what each decision kind is (tool kind, reference, media, upstream, inputs, excerpt suggester) into one `decisions.py` table, with no change in behaviour, before the captions and thumbnail steps add two more kinds?
+**Gate:** none
+**Next:** build the `decisions.py` table with no change in behaviour, before captions and thumbnail
+
+Decided 2026-11-22 (Álvaro, decision deck round 3): yes — Move what each decision kind is (tool kind, reference, media, upstream, inputs, excerpt suggester) into one `decisions.py` table, with no change in behaviour, before the captions and thumbnail steps add two more kinds?
 
 **Goal:** Adding a decision kind becomes one entry in one table instead of name checks in seven modules, so the captions and thumbnail steps of the design cost one file each and cannot forget a branch.
 
@@ -94,7 +97,7 @@ As of 2026-09-30:
 
 ## Approval
 
-**Needs your yes** — the `Gate` question; recommended answer: yes, because the repo has
+**Approved (Álvaro, 2026-11-22).** It asked: — the `Gate` question; recommended answer: yes, because the repo has
 no `## Approval` section, the change is behaviour-preserving, and it should land before
 captions and thumbnails add two more kinds to the scatter.
 
