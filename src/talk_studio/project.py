@@ -19,21 +19,12 @@ from pathlib import Path
 
 import tomli_w
 
+from . import decisions as kinds
 from . import media
 from .timecode import Excerpt, parse_excerpt
 
 PROJECT_FILE = "project.toml"
-DECISIONS = ("audio", "master", "grade")
-# A decision judged on the output of another: its samples are cut from the
-# upstream pick, so changing that pick invalidates it.
-UPSTREAM = {"master": "audio"}
-# Vertical clips are decisions too, one per passage, named clip-<slug>.
-CLIP_PREFIX = "clip-"
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
-
-def is_clip(name: str) -> bool:
-    return name.startswith(CLIP_PREFIX)
 LABELS = "ABCDEFGHI"
 
 
@@ -106,7 +97,7 @@ class Project:
             source=video,
             fingerprint=media.fingerprint(video),
             duration=media.duration(video),
-            decisions={name: Decision(name) for name in DECISIONS},
+            decisions={name: Decision(name) for name in kinds.fixed()},
         )
         project.save()
         return project
@@ -118,7 +109,7 @@ class Project:
         if not path.exists():
             raise ProjectError(f"no {PROJECT_FILE} in {root}; run `talk-studio init` first")
         data = tomllib.loads(path.read_text())
-        decisions = {
+        loaded = {
             name: Decision(
                 name=name,
                 status=raw.get("status", "open"),
@@ -126,38 +117,38 @@ class Project:
                 pick=raw.get("pick") or None,
             )
             for name, raw in data.get("decisions", {}).items()
-            if name in DECISIONS or is_clip(name)
+            if kinds.find(name)
         }
-        for name in DECISIONS:
-            decisions.setdefault(name, Decision(name))
+        for name in kinds.fixed():
+            loaded.setdefault(name, Decision(name))
         source = data["source"]
         return cls(
             root=root,
             source=Path(source["path"]),
             fingerprint=source["fingerprint"],
             duration=float(source["duration"]),
-            decisions=decisions,
+            decisions=loaded,
             words=(root / source["words"]).resolve() if source.get("words") else None,
         )
 
     def save(self) -> None:
-        decisions = {}
+        entries = {}
         for decision in self.decisions.values():
             entry = {"status": decision.status, "excerpts": [str(e) for e in decision.excerpts]}
             if decision.pick:
                 entry["pick"] = decision.pick
-            decisions[decision.name] = entry
+            entries[decision.name] = entry
         data = {
             "source": {"path": str(self.source), "fingerprint": self.fingerprint, "duration": self.duration}
             | ({"words": os.path.relpath(self.words, self.root)} if self.words else {}),
-            "decisions": decisions,
+            "decisions": entries,
         }
         atomic_write(self.root / PROJECT_FILE, tomli_w.dumps(data))
 
     def add_clip(self, slug: str, excerpt: Excerpt) -> Decision:
         if not SLUG_RE.match(slug):
             raise ProjectError(f"clip name {slug!r} must be lowercase words joined by hyphens")
-        name = CLIP_PREFIX + slug
+        name = kinds.CLIP.prefix + slug
         if name in self.decisions:
             raise ProjectError(f"{name} already exists")
         self.decisions[name] = Decision(name, excerpts=[self._checked(excerpt)])
@@ -338,7 +329,7 @@ class Project:
     def reopen(self, name: str) -> None:
         decision = self.decision(name)
         decision.status, decision.pick = "open", None
-        for downstream, upstream in UPSTREAM.items():
-            if upstream == name and self.decisions[downstream].status == "picked":
+        for downstream in kinds.downstream(name):
+            if self.decisions[downstream].status == "picked":
                 self.decisions[downstream].status = "stale"
         self.save()

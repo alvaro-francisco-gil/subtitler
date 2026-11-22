@@ -11,7 +11,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from . import binaries, cache, media, probe, sampling
+from . import binaries, cache, decisions, media, probe, sampling
 from . import tools
 from .project import Project, ProjectError
 
@@ -23,15 +23,18 @@ CPU_ENCODER = ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
 
 def render(project: Project, out: Path | None = None) -> Path:
     project.check_source()
-    project.picked("audio")
-    for name in ("master", "grade"):
+    # The pipeline below is written out step by step on purpose: the order is a
+    # product rule. A new fixed kind fails this unpacking until it has a step.
+    audio_name, master_name, grade_name = decisions.fixed()
+    project.picked(audio_name)
+    for name in (master_name, grade_name):
         decision = project.decision(name)
         if decision.status != "picked" and project.candidates(name):
             raise ProjectError(f"{name} is {decision.status}; pick a candidate in the review page first")
-    master = project.decision("master")
+    master = project.decision(master_name)
     grade = None
-    if project.decision("grade").status == "picked":
-        candidate = project.picked("grade")
+    if project.decision(grade_name).status == "picked":
+        candidate = project.picked(grade_name)
         grade = tools.get_tool(candidate.tool).filters(project.source, candidate.settings)
 
     out = out or cache.render_path(project.root, f"{project.source.stem}-final.mp4")
@@ -39,12 +42,12 @@ def render(project: Project, out: Path | None = None) -> Path:
     with tempfile.TemporaryDirectory(prefix="talk-studio-render-") as staging:
         staging = Path(staging)
         if master.status == "picked":
-            candidate = project.picked("master")
+            candidate = project.picked(master_name)
             shaped = tools.get_tool(candidate.tool).apply(
-                sampling.working_audio(project, "master"), candidate.settings, staging / "mastered.wav",
+                sampling.working_audio(project, master_name), candidate.settings, staging / "mastered.wav",
             )
         else:
-            shaped = sampling.picked_audio(project, "audio")
+            shaped = sampling.picked_audio(project, audio_name)
         audio = media.publish_loudness(shaped, staging / "published.wav")
         head = [binaries.ffmpeg(), "-y", "-v", "error", "-i", str(project.source), "-i", str(audio), "-map", "0:v:0", "-map", "1:a:0"]
         tail = ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)]
